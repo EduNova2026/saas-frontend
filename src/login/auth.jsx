@@ -2,15 +2,15 @@ import { useState, useEffect } from "react";
 
 // ── Tokens design ─────────────────────────────────────────────────────────────
 const C = {
-  navy:        "#0e1b2e",
-  accent:      "#4f8ef7",
-  accentHover: "#3a7cf5",
-  accentGlow:  "rgba(18, 39, 76, 0.18)",
-  text:        "#f0f4ff",
-  textSec:     "#8fa3c2",
-  textMuted:   "#5a7296",
-  border:      "rgba(79,142,247,0.15)",
-  inputBg:     "rgba(14,27,46,0.7)",
+  navy:        "#f1f4fb",
+  accent:      "#5E91D4",
+  accentHover: "#5171A5",
+  accentGlow:  "rgba(81, 113, 165, 0.18)",
+  text:        "#5171A5",
+  textSec:     "#5E91D4",
+  textMuted:   "rgba(81, 113, 165, 0.65)",
+  border:      "rgba(81, 113, 165, 0.18)",
+  inputBg:     "rgba(241, 244, 251, 0.95)",
   errorBg:     "rgba(224,91,91,0.12)",
   errorBorder: "rgba(224,91,91,0.3)",
   success:     "#4abf8a",
@@ -101,8 +101,9 @@ const styles = {
     zIndex: 1,
     padding: "26px 26px 32px",
     borderRadius: 24,
-    boxShadow: "0 30px 80px rgba(0, 0, 0, 0.16)",
-    background: "rgba(14, 27, 46, 0.95)",
+    boxShadow: "0 30px 80px rgba(81, 113, 165, 0.16)",
+    background: "#ffffff",
+    border: "1px solid rgba(81, 113, 165, 0.12)",
   },
   loginHeader: { marginBottom: 42, textAlign: "center" },
   loginTitle: {
@@ -110,7 +111,7 @@ const styles = {
     fontSize: 42,
     letterSpacing: "-0.4px",
     marginBottom: 10,
-    color: C.text,
+    color: C.text, 
   },
   loginSubtitle: {
     fontSize: 16,
@@ -140,7 +141,7 @@ const styles = {
   input: (focused, error) => ({
     width: "100%",
     height: 58,
-    background: focused ? "rgba(23, 99, 212, 0.9)" : C.inputBg,
+    background: focused ? "rgba(94, 145, 212, 0.12)" : C.inputBg,
     border: `1px solid ${error ? C.errorBorder : focused ? C.accent : C.border}`,
     borderRadius: 16,
     padding: "0 48px 0 46px",
@@ -197,13 +198,13 @@ const styles = {
     gap: 10,
     marginTop: 18,
     letterSpacing: "0.02em",
-    boxShadow: "0 8px 28px rgba(79,142,247,0.25)",
+    boxShadow: "0 8px 28px rgba(94,145,212,0.25)",
     opacity: loading ? 0.7 : 1,
   }),
   successOverlay: (visible) => ({
     position: "fixed",
     inset: 0,
-    background: C.navy,
+    background: "rgba(241, 244, 251, 0.95)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -337,7 +338,7 @@ export default function LoginPage() {
       .edu-fadeup-2 { animation: fadeUp 0.5s 0.12s ease both; }
       .edu-fadeup-3 { animation: fadeUp 0.5s 0.18s ease both; }
       .edu-popIn    { animation: popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275) both; }
-      .edu-btn:hover { background: ${C.accentHover} !important; box-shadow: 0 6px 28px rgba(79,142,247,0.38) !important; }
+      .edu-btn:hover { background: ${C.accentHover} !important; box-shadow: 0 6px 28px rgba(81,113,165,0.38) !important; }
       .edu-btn:active { transform: scale(0.99); }
       .edu-eye:hover { color: ${C.accent} !important; }
       .edu-input:focus { caret-color: ${C.accent}; }
@@ -363,7 +364,7 @@ export default function LoginPage() {
             
             {/* En-tête */}
             <div style={styles.loginHeader} className="edu-fadeup-0">
-              <h1 style={styles.loginTitle}>Edu'Nova</h1>
+              <h1 style={styles.loginTitle}>EDU'NOVA</h1>
               <p style={styles.loginSubtitle}>Connectez-vous à votre espace</p>
             </div>
 
