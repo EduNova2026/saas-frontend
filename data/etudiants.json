@@ -1,0 +1,103 @@
+[
+  {
+    "id": "90000001",
+    "nom": "AMARI",
+    "prenom": "Amine",
+    "classe": "INFO 3A",
+    "matieres": {
+      "BDD": {
+        "moyenne": 12.5,
+        "scoreRisque": 18,
+        "statut": "OK",
+        "notes": [
+          { "evaluation": "DS1 (FrontEnd WEB)", "note": 7.07 },
+          { "evaluation": "Projet SQL", "note": 14.5 },
+          { "evaluation": "TP Normalisation", "note": 16.0 }
+        ]
+      },
+      "Algo": {
+        "moyenne": 9.5,
+        "scoreRisque": 55,
+        "statut": "Suivre",
+        "notes": [
+          { "evaluation": "DS1 Complexité", "note": 8.0 },
+          { "evaluation": "TP Graphes", "note": 11.0 }
+        ]
+      }
+    }
+  },
+  {
+    "id": "90000002",
+    "nom": "BACHIRI",
+    "prenom": "Sarah",
+    "classe": "INFO 3A",
+    "matieres": {
+      "BDD": {
+        "moyenne": 11.8,
+        "scoreRisque": 25,
+        "statut": "OK",
+        "notes": [
+          { "evaluation": "DS1 (FrontEnd WEB)", "note": 11.89 }
+        ]
+      }
+    }
+  },
+  {
+    "id": "90000003",
+    "nom": "BELKACEM",
+    "prenom": "Yanis",
+    "classe": "INFO 3A",
+    "matieres": {
+      "BDD": {
+        "moyenne": 10.6,
+        "scoreRisque": 45,
+        "statut": "OK",
+        "notes": [
+          { "evaluation": "DS1 (FrontEnd WEB)", "note": 10.64 }
+        ]
+      }
+    }
+  },
+  {
+    "id": "90000004",
+    "nom": "BENALI",
+    "prenom": "Inès",
+    "classe": "INFO 3A",
+    "matieres": {
+      "BDD": {
+        "moyenne": 14.2,
+        "scoreRisque": 12,
+        "statut": "OK",
+        "notes": [
+          { "evaluation": "DS1 (FrontEnd WEB)", "note": 11.46 },
+          { "evaluation": "DS2 Architecture", "note": 17.0 }
+        ]
+      }
+    }
+  },
+  {
+    "id": "90000005",
+    "nom": "BERTRAND",
+    "prenom": "Noé",
+    "classe": "INFO 3A",
+    "matieres": {
+      "BDD": {
+        "moyenne": 6.8,
+        "scoreRisque": 85,
+        "statut": "Risque",
+        "notes": [
+          { "evaluation": "DS1 (FrontEnd WEB)", "note": 5.46 },
+          { "evaluation": "TP Modélisation", "note": 8.2 }
+        ]
+      },
+      "Algo": {
+        "moyenne": 5.1,
+        "scoreRisque": 90,
+        "statut": "Risque",
+        "notes": [
+          { "evaluation": "DS1 Arbres", "note": 5.1 }
+        ]
+      }
+    }
+  }
+]
