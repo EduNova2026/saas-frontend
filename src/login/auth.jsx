@@ -266,23 +266,11 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const data = await login(email.trim(), password);
-      const user = data.user;
-      const resolveRedirect = (userPayload) => {
-        const role = (userPayload?.roles?.[0] || "").toLowerCase();
-
-        /*
-        if (role.includes("admin")) return "/admin/dashboard";
-        if (role.includes("responsable")) return "/responsable/dashboard";
-        if (role.includes("enseignant")) return "/enseignant/dashboard";
-        return "/dashboard";
-        */
-       return "/dashboard";
-      };
+      await login(email.trim(), password);
 
       setSuccess(true);
       setTimeout(() => {
-        window.location.href = resolveRedirect(user);
+        window.location.href = "/profile";
       }, 1400);
 
     } catch (err) {
