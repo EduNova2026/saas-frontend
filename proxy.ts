@@ -10,6 +10,7 @@ export default function proxy(request: NextRequest) {
 
   if (!accessToken) {
     const loginUrl = new URL("/", request.url);
+    loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -17,5 +18,5 @@ export default function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/students/:path*", "/promotions/:path*"],
+  matcher: ["/profile/:path*", "/dashboard/:path*", "/students/:path*", "/promotions/:path*"],
 };
