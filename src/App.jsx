@@ -1,16 +1,17 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Auth from './login/auth';
+// Correction de la faute de frappe (Dashborad -> Dashboard) pour le composant
+import Dashboard from './app/(appli)/dashboard/page'; 
 
 function App() {
   return (
-    // On enveloppe toute l'application dans le Router
     <Router>
       <Routes>
-        {/* Ta route d'accueil qui charge ton composant de connexion */}
+        {/* Page de connexion */}
         <Route path="/" element={<div className="auth"><Auth /></div>} />
         
-        {/* Tu pourras ajouter d'autres routes ici plus tard */}
-        {/* <Route path="/dashboard" element={<Dashboard />} /> */}
+        {/* Page Dashboard désormais active */}
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </Router>
   );

@@ -290,10 +290,14 @@ export default function LoginPage() {
       const user = data.user || null;
       const resolveRedirect = (userPayload) => {
         const role = (userPayload?.roles?.[0] || "").toLowerCase();
+
+        /*
         if (role.includes("admin")) return "/admin/dashboard";
         if (role.includes("responsable")) return "/responsable/dashboard";
         if (role.includes("enseignant")) return "/enseignant/dashboard";
         return "/dashboard";
+        */
+       return "/dashboard";
       };
 
       if (user) {
