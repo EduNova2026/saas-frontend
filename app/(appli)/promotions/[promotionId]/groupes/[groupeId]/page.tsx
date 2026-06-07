@@ -522,7 +522,7 @@ export default function GroupeManagementPage() {
                   <div className="space-y-2">
                     <label htmlFor="enseignement-id" className="text-sm font-medium text-slate-700">Enseignement lié au groupe</label>
                     <Input id="enseignement-id" value={enseignementId} onChange={(event) => setEnseignementId(event.target.value)} placeholder="UUID enseignement" />
-                    <p className="text-xs text-slate-500">Le backend n&apos;expose pas encore automatiquement l&apos;enseignement d&apos;un groupe. Renseignez-le pour charger les examens.</p>
+                    <p className="text-xs text-slate-500">FOURNIR MANUELLEMENT l'UUID de l'enseignement 32 chiffres EM: A automatiser</p>
                   </div>
                   <Button variant="outline" onClick={() => void loadExamens()} disabled={!enseignementId.trim() || loadingExamens}>
                     {loadingExamens ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
