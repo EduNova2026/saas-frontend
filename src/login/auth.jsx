@@ -237,7 +237,7 @@ const styles = {
 };
 
 // ── Composant principal ───────────────────────────────────────────────────────
-const API_BASE = "/api/v1/auth";
+const API_BASE = "http://localhost:8000/api/v1/auth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
