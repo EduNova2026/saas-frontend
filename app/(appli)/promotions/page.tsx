@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   GraduationCap,
+  Eye,
   ShieldAlert,
   Loader2,
   Plus,
@@ -33,6 +34,7 @@ import {
 import {
   getPromotions,
   createPromotion,
+  updatePromotion,
   type PromotionOut,
 } from "@/lib/api/scolarite";
 import { useAuth } from "@/hooks/useAuth";
@@ -49,6 +51,11 @@ export default function PromotionsPage() {
   const [anneeScolaire, setAnneeScolaire] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [editingPromotion, setEditingPromotion] = useState<PromotionOut | null>(null);
+  const [editNom, setEditNom] = useState("");
+  const [editAnneeScolaire, setEditAnneeScolaire] = useState("");
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
   const canAccessPromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
 
@@ -69,15 +76,10 @@ export default function PromotionsPage() {
 
   useEffect(() => {
     if (authLoading || !canAccessPromotions) {
-      setLoading(false);
       return;
     }
 
-    async function init() {
-      await chargerPromotions();
-    }
-
-    init();
+    queueMicrotask(() => void chargerPromotions());
   }, [authLoading, canAccessPromotions, chargerPromotions]);
 
   const handleCreate = async () => {
@@ -96,6 +98,42 @@ export default function PromotionsPage() {
       );
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openEditDialog = (promotion: PromotionOut) => {
+    setEditingPromotion(promotion);
+    setEditNom(promotion.nom);
+    setEditAnneeScolaire(promotion.annee_scolaire);
+    setUpdateError(null);
+  };
+
+  const closeEditDialog = () => {
+    setEditingPromotion(null);
+    setEditNom("");
+    setEditAnneeScolaire("");
+    setUpdateError(null);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingPromotion) return;
+
+    setUpdating(true);
+    setUpdateError(null);
+
+    try {
+      await updatePromotion(editingPromotion.id, {
+        nom: editNom.trim(),
+        annee_scolaire: editAnneeScolaire.trim(),
+      });
+      closeEditDialog();
+      await chargerPromotions();
+    } catch (err) {
+      setUpdateError(
+        err instanceof Error ? err.message : "Erreur lors de la modification."
+      );
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -301,12 +339,23 @@ export default function PromotionsPage() {
                       </span>
                     </TableCell>
                     <TableCell className="py-4">
-                      <Button asChild size="sm" variant="outline" className="gap-2">
-                        <Link href={`/promotions/${promo.id}`}>
+                      <div className="flex flex-wrap gap-2">
+                        <Button asChild size="sm" variant="outline" className="gap-2">
+                          <Link href={`/promotions/${promo.id}`}>
+                            <Eye className="h-4 w-4" />
+                            Voir
+                          </Link>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() => openEditDialog(promo)}
+                        >
                           <Pencil className="h-4 w-4" />
                           Modifier
-                        </Link>
-                      </Button>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -324,6 +373,60 @@ export default function PromotionsPage() {
           </Table>
         </ScrollArea>
       </Card>
+
+      <Dialog open={editingPromotion !== null} onOpenChange={(open) => !open && closeEditDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier la promotion</DialogTitle>
+            <DialogDescription>
+              Mettez à jour le nom et l&apos;année scolaire de la promotion.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="edit-promotion-nom" className="text-sm font-medium text-slate-700">
+                Nom de la promotion
+              </label>
+              <Input
+                id="edit-promotion-nom"
+                value={editNom}
+                onChange={(event) => setEditNom(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="edit-promotion-annee" className="text-sm font-medium text-slate-700">
+                Année scolaire
+              </label>
+              <Input
+                id="edit-promotion-annee"
+                value={editAnneeScolaire}
+                onChange={(event) => setEditAnneeScolaire(event.target.value)}
+              />
+            </div>
+            {updateError ? <p className="text-sm text-red-600">{updateError}</p> : null}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditDialog} disabled={updating}>
+              Annuler
+            </Button>
+            <Button
+              onClick={handleUpdate}
+              disabled={!editNom.trim() || !editAnneeScolaire.trim() || updating}
+            >
+              {updating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Modification…
+                </>
+              ) : (
+                "Enregistrer"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }
