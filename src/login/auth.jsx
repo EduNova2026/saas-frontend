@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { login } from "@/lib/api/auth";
 
 // ── Tokens design ─────────────────────────────────────────────────────────────
 const C = {
@@ -237,8 +238,6 @@ const styles = {
 };
 
 // ── Composant principal ───────────────────────────────────────────────────────
-const API_BASE = "http://localhost:8000/api/v1/auth";
-
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -267,27 +266,8 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data?.detail || "Email ou mot de passe incorrect.");
-        return;
-      }
-
-      const accessToken = data.access_token;
-      const refreshToken = data.refresh_token;
-
-      if (accessToken) localStorage.setItem("access_token", accessToken);
-      if (refreshToken) localStorage.setItem("refresh_token", refreshToken);
-      if (data.token_type) localStorage.setItem("token_type", data.token_type);
-
-      const user = data.user || null;
+      const data = await login(email.trim(), password);
+      const user = data.user;
       const resolveRedirect = (userPayload) => {
         const role = (userPayload?.roles?.[0] || "").toLowerCase();
 
@@ -300,29 +280,13 @@ export default function LoginPage() {
        return "/dashboard";
       };
 
-      if (user) {
-        setSuccess(true);
-        setTimeout(() => {
-          window.location.href = resolveRedirect(user);
-        }, 1400);
-      } else {
-        try {
-          const meRes = await fetch(`${API_BASE}/me`, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          const fetchedUser = await meRes.json();
-          setSuccess(true);
-          setTimeout(() => {
-            window.location.href = resolveRedirect(fetchedUser);
-          }, 1400);
-        } catch {
-          setSuccess(true);
-          setTimeout(() => { window.location.href = "/dashboard"; }, 1400);
-        }
-      }
+      setSuccess(true);
+      setTimeout(() => {
+        window.location.href = resolveRedirect(user);
+      }, 1400);
 
-    } catch {
-      setError("Impossible de contacter le serveur. Réessayez plus tard.");
+    } catch (err) {
+      setError(err?.message || "Impossible de contacter le serveur. Réessayez plus tard.");
     } finally {
       setLoading(false);
     }
