@@ -126,7 +126,7 @@ export default function DashboardPage() {
             <div>
               <h2 className="text-base font-semibold text-slate-900">Accès non autorisé</h2>
               <p className="text-sm text-slate-600 mt-1">
-                Votre rôle ne permet pas d'accéder au dashboard. Seuls les responsables pédagogiques peuvent consulter cette page.
+                Votre rôle ne permet pas d&apos;accéder au dashboard. Seuls les responsables pédagogiques peuvent consulter cette page.
               </p>
             </div>
             <Button asChild variant="outline">
@@ -243,7 +243,7 @@ export default function DashboardPage() {
             </ChartContainer>
             <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
               <p className="rounded-lg bg-white/90 px-4 py-3 text-sm font-medium text-slate-600 shadow-sm border">
-                Données d'évaluation indisponibles
+                Données d&apos;évaluation indisponibles
               </p>
             </div>
           </CardContent>

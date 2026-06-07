@@ -133,7 +133,7 @@ export default function StudentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Gestion des Étudiants</h1>
-          <p className="text-sm text-slate-500">Un profil unique par étudiant, données d'évaluation à venir.</p>
+          <p className="text-sm text-slate-500">Un profil unique par étudiant, données d&apos;évaluation à venir.</p>
         </div>
       </div>
 
@@ -148,7 +148,7 @@ export default function StudentsPage() {
             <div>
               <h2 className="text-base font-semibold text-slate-900">Accès non autorisé</h2>
               <p className="text-sm text-slate-600 mt-1">
-                Votre rôle ne permet pas d'accéder à la gestion des étudiants. Seuls les responsables pédagogiques peuvent consulter cette page.
+                Votre rôle ne permet pas d&apos;accéder à la gestion des étudiants. Seuls les responsables pédagogiques peuvent consulter cette page.
               </p>
             </div>
             <Button asChild variant="outline">
@@ -256,7 +256,7 @@ export default function StudentsPage() {
 
                   <div className="flex items-center gap-2 text-slate-800 bg-blue-50/50 p-2 rounded border border-blue-100/50">
                     <GraduationCap className="h-4 w-4 text-blue-600 shrink-0" />
-                    <span>Données d'évaluation à venir</span>
+                    <span>Données d&apos;évaluation à venir</span>
                   </div>
                 </div>
 
@@ -274,9 +274,9 @@ export default function StudentsPage() {
               <div className="p-3 rounded-lg border flex gap-2.5 mt-2 bg-slate-50/80 border-slate-100 text-slate-600">
                 <GraduationCap className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
                 <div className="flex flex-col">
-                  <span className="font-semibold text-xs">Données d'évaluation à venir</span>
+                  <span className="font-semibold text-xs">Données d&apos;évaluation à venir</span>
                   <span className="text-[11px] opacity-90 leading-tight">
-                    Le backend fournit actuellement l'identité de l'étudiant et sa promotion.
+                    Le backend fournit actuellement l&apos;identité de l&apos;étudiant et sa promotion.
                   </span>
                 </div>
               </div>

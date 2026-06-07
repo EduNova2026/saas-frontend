@@ -33,7 +33,7 @@ export default function ProfilePage() {
             <div>
               <h1 className="text-base font-semibold text-slate-900">Session expirée</h1>
               <p className="mt-1 text-sm text-slate-600">
-                Votre session n'est plus active. Reconnectez-vous pour consulter votre profil.
+                Votre session n&apos;est plus active. Reconnectez-vous pour consulter votre profil.
               </p>
             </div>
             <Button asChild>
@@ -156,7 +156,7 @@ export default function ProfilePage() {
           ) : null}
           {!canSeeDashboard && !canSeePromotions ? (
             <p className="text-sm text-slate-500">
-              Aucun module métier n'est disponible pour votre rôle actuellement.
+              Aucun module métier n&apos;est disponible pour votre rôle actuellement.
             </p>
           ) : null}
         </CardContent>
