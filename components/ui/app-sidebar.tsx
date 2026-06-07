@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link"
-import { LayoutDashboard, Users, Settings, GraduationCap, LogOut, ShieldAlert, BookOpen } from "lucide-react"
+import { LayoutDashboard, Users, GraduationCap, LogOut, UserRound } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -23,10 +23,10 @@ interface NavItem {
 }
 
 const allNavItems: NavItem[] = [
+  { title: "Mon profil", url: "/profile", icon: UserRound },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: ["responsable_pedagogique"] },
   { title: "Étudiants", url: "/students", icon: Users, roles: ["responsable_pedagogique"] },
   { title: "Promotions", url: "/promotions", icon: GraduationCap, roles: ["responsable_pedagogique", "admin", "admin_pedagogique"] },
-  { title: "Paramètres", url: "/settings", icon: Settings },
 ]
 
 function roleLabel(roles: string[]): string {
