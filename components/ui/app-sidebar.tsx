@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link"
-import { LayoutDashboard, Users, Settings, GraduationCap, LogOut } from "lucide-react"
+import { LayoutDashboard, Users, Settings, GraduationCap, LogOut, ShieldAlert, BookOpen } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -9,17 +11,42 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { useAuth } from "@/hooks/useAuth"
+import { logout } from "@/lib/api/auth"
+import { useMemo } from "react"
 
-const navigationItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Étudiants", url: "/students", icon: Users },
+interface NavItem {
+  title: string
+  url: string
+  icon: React.ComponentType<{ className?: string }>
+  roles?: string[]
+}
+
+const allNavItems: NavItem[] = [
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: ["responsable_pedagogique"] },
+  { title: "Étudiants", url: "/students", icon: Users, roles: ["responsable_pedagogique"] },
+  { title: "Promotions", url: "/promotions", icon: GraduationCap, roles: ["responsable_pedagogique", "admin", "admin_pedagogique"] },
   { title: "Paramètres", url: "/settings", icon: Settings },
 ]
 
+function roleLabel(roles: string[]): string {
+  if (roles.includes("responsable_pedagogique")) return "Espace Responsable"
+  if (roles.includes("enseignant")) return "Espace Enseignant"
+  return "Espace Edunova"
+}
+
 export function AppSidebar() {
+  const { user, hasRole } = useAuth()
+
+  const navigationItems = useMemo(
+    () => allNavItems.filter((item) => !item.roles || item.roles.some((r) => hasRole(r))),
+    [hasRole]
+  )
+
+  const label = user?.roles?.length ? roleLabel(user.roles) : "Espace Edunova"
+
   return (
     <Sidebar className="border-r border-slate-200 bg-white">
-      {/* 1. En-tête */}
       <SidebarHeader className="p-4 border-b border-slate-100">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white">
@@ -27,20 +54,17 @@ export function AppSidebar() {
           </div>
           <div className="flex flex-col">
             <span className="font-bold text-sm text-slate-900">Edunova</span>
-            <span className="text-xs text-slate-500">Espace Enseignant</span>
+            <span className="text-xs text-slate-500">{label}</span>
           </div>
         </div>
       </SidebarHeader>
 
-      {/* 2. Menu de navigation corrigé */}
       <SidebarContent className="px-2 py-4">
         <SidebarMenu>
           {navigationItems.map((item) => (
             <SidebarMenuItem key={item.title}>
-              {/* Le bouton prend le style, mais s'efface au profit du Link */}
               <SidebarMenuButton asChild className="text-slate-600 hover:text-slate-900">
                 <Link href={item.url}>
-                  {/* On met une balise 'a' classique pour porter le contenu. Next.js adore ça ! */}
                   <span className="flex items-center gap-3 w-full px-3 py-2">
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
@@ -52,11 +76,13 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarContent>
 
-      {/* 3. Pied de page */}
       <SidebarFooter className="p-4 border-t border-slate-100">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="flex w-full items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 hover:text-red-600 transition-colors">
+            <SidebarMenuButton
+              onClick={logout}
+              className="flex w-full items-center gap-3 px-3 py-2 text-red-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+            >
               <LogOut className="h-4 w-4" />
               <span>Déconnexion</span>
             </SidebarMenuButton>
