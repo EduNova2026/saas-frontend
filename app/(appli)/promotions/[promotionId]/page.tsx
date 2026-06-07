@@ -432,7 +432,7 @@ export default function PromotionDashboardPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingEtudiant ? "Modifier l'étudiant" : "Modifier le groupe"}</DialogTitle>
-            <DialogDescription>Les changements seront synchronisés avec le service scolarité.</DialogDescription>
+            <DialogDescription>Le nom du groupe sera mis à jour.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             {editingEtudiant ? (

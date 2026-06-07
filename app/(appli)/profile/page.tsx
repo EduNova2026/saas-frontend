@@ -54,7 +54,7 @@ export default function ProfilePage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Mon profil</h1>
         <p className="text-sm text-slate-500">
-          Interface neutre basée sur les informations de votre session.
+          Bienvenue sur votre espace personnel
         </p>
       </div>
 
