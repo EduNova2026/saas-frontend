@@ -271,6 +271,9 @@ export default function PromotionManagementPage() {
                 promotion.
               </p>
             </div>
+            <Button asChild variant="outline">
+              <Link href="/profile">Retour à mon profil</Link>
+            </Button>
           </CardContent>
         </Card>
       </main>

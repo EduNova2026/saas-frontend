@@ -1,7 +1,9 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { useReactTable, getCoreRowModel, flexRender, ColumnDef, getFilteredRowModel } from "@tanstack/react-table"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -26,8 +28,14 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { hasRole, loading: authLoading } = useAuth()
+  const canAccessStudents = hasRole("responsable_pedagogique")
 
   useEffect(() => {
+    if (authLoading || !canAccessStudents) {
+      setLoading(false)
+      return
+    }
+
     let actif = true
 
     async function chargerEtudiants() {
@@ -50,12 +58,12 @@ export default function StudentsPage() {
       }
     }
 
-    chargerEtudiants()
+    void chargerEtudiants()
 
     return () => {
       actif = false
     }
-  }, [])
+  }, [authLoading, canAccessStudents])
 
   useEffect(() => {
     if (etudiantSelectionne && !etudiants.some((etudiant) => etudiant.id === etudiantSelectionne.id)) {
@@ -133,7 +141,7 @@ export default function StudentsPage() {
         <div className="flex items-center justify-center py-20">
           <p className="text-slate-500 text-sm">Chargement…</p>
         </div>
-      ) : !hasRole("responsable_pedagogique") ? (
+      ) : !canAccessStudents ? (
         <Card className="border-amber-200 bg-amber-50/60 max-w-md mx-auto">
           <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
             <ShieldAlert className="h-10 w-10 text-amber-600" />
@@ -143,6 +151,9 @@ export default function StudentsPage() {
                 Votre rôle ne permet pas d'accéder à la gestion des étudiants. Seuls les responsables pédagogiques peuvent consulter cette page.
               </p>
             </div>
+            <Button asChild variant="outline">
+              <Link href="/profile">Retour à mon profil</Link>
+            </Button>
           </CardContent>
         </Card>
       ) : (

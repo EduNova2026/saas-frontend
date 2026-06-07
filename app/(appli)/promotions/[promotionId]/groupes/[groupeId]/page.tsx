@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Plus, Search, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Search, ShieldAlert, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -34,6 +34,7 @@ import {
   type EtudiantOut,
   type GroupeOut,
 } from "@/lib/api/scolarite";
+import { useAuth } from "@/hooks/useAuth";
 
 function getParamValue(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
@@ -43,6 +44,7 @@ export default function GroupeManagementPage() {
   const params = useParams<{ promotionId: string; groupeId: string }>();
   const promotionId = getParamValue(params.promotionId);
   const groupeId = getParamValue(params.groupeId);
+  const { hasRole, loading: authLoading } = useAuth();
   const [groupe, setGroupe] = useState<GroupeOut | null>(null);
   const [etudiantsGroupe, setEtudiantsGroupe] = useState<EtudiantOut[]>([]);
   const [etudiantsPromotion, setEtudiantsPromotion] = useState<EtudiantOut[]>([]);
@@ -53,6 +55,8 @@ export default function GroupeManagementPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
+  const canManagePromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
 
   const chargerGroupe = useCallback(async () => {
     if (!promotionId || !groupeId) return;
@@ -81,8 +85,13 @@ export default function GroupeManagementPage() {
   }, [groupeId, promotionId]);
 
   useEffect(() => {
+    if (authLoading || !canManagePromotions) {
+      setLoading(false);
+      return;
+    }
+
     void chargerGroupe();
-  }, [chargerGroupe]);
+  }, [authLoading, canManagePromotions, chargerGroupe]);
 
   const etudiantsFiltres = useMemo(() => {
     const search = recherche.trim().toLowerCase();
@@ -138,6 +147,35 @@ export default function GroupeManagementPage() {
       setSaving(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </main>
+    );
+  }
+
+  if (!canManagePromotions) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Card className="w-full max-w-md border-amber-200 bg-amber-50/60">
+          <CardContent className="flex flex-col items-center gap-3 py-8 text-center">
+            <ShieldAlert className="h-10 w-10 text-amber-600" />
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Accès non autorisé</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Votre rôle ne permet pas d'accéder à la gestion de ce groupe.
+              </p>
+            </div>
+            <Button asChild variant="outline">
+              <Link href="/profile">Retour à mon profil</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   return (
     <main className="p-10 bg-slate-50 min-h-screen space-y-6">

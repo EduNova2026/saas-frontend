@@ -49,6 +49,8 @@ export default function PromotionsPage() {
   const [anneeScolaire, setAnneeScolaire] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
+  const canAccessPromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
 
   const chargerPromotions = useCallback(async () => {
     try {
@@ -66,12 +68,17 @@ export default function PromotionsPage() {
   }, []);
 
   useEffect(() => {
+    if (authLoading || !canAccessPromotions) {
+      setLoading(false);
+      return;
+    }
+
     async function init() {
       await chargerPromotions();
     }
 
     init();
-  }, [chargerPromotions]);
+  }, [authLoading, canAccessPromotions, chargerPromotions]);
 
   const handleCreate = async () => {
     setCreateError(null);
@@ -100,9 +107,7 @@ export default function PromotionsPage() {
     );
   }
 
-  const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
-
-  if (!hasRole("responsable_pedagogique") && !isAdminPedagogique) {
+  if (!canAccessPromotions) {
     return (
       <main className="flex items-center justify-center min-h-screen bg-slate-50">
         <Card className="border-amber-200 bg-amber-50/60 max-w-md w-full">
@@ -118,6 +123,9 @@ export default function PromotionsPage() {
                 consulter cette page.
               </p>
             </div>
+            <Button asChild variant="outline">
+              <Link href="/profile">Retour à mon profil</Link>
+            </Button>
           </CardContent>
         </Card>
       </main>
@@ -164,7 +172,7 @@ export default function PromotionsPage() {
                 </label>
                 <Input
                   id="promotion-nom"
-                  placeholder="ex: BUT Informatique"
+                  placeholder="ex: ISEN CIR3"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
                 />

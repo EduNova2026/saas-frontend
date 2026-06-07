@@ -1,7 +1,9 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { useReactTable, getCoreRowModel, flexRender, ColumnDef } from "@tanstack/react-table"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -27,8 +29,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { hasRole, loading: authLoading } = useAuth()
+  const canAccessDashboard = hasRole("responsable_pedagogique")
 
   useEffect(() => {
+    if (authLoading || !canAccessDashboard) {
+      setLoading(false)
+      return
+    }
+
     let actif = true
 
     async function chargerEtudiants() {
@@ -51,12 +59,12 @@ export default function DashboardPage() {
       }
     }
 
-    chargerEtudiants()
+    void chargerEtudiants()
 
     return () => {
       actif = false
     }
-  }, [])
+  }, [authLoading, canAccessDashboard])
 
   const columns = useMemo<ColumnDef<EtudiantOut>[]>(() => [
     {
@@ -109,7 +117,7 @@ export default function DashboardPage() {
     )
   }
 
-  if (!hasRole("responsable_pedagogique")) {
+  if (!canAccessDashboard) {
     return (
       <main className="flex items-center justify-center min-h-screen bg-slate-50">
         <Card className="border-amber-200 bg-amber-50/60 max-w-md w-full">
@@ -121,6 +129,9 @@ export default function DashboardPage() {
                 Votre rôle ne permet pas d'accéder au dashboard. Seuls les responsables pédagogiques peuvent consulter cette page.
               </p>
             </div>
+            <Button asChild variant="outline">
+              <Link href="/profile">Retour à mon profil</Link>
+            </Button>
           </CardContent>
         </Card>
       </main>
