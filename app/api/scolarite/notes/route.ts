@@ -1,19 +1,14 @@
 import { backendFetch } from "@/lib/server/backend";
 import { NextRequest, NextResponse } from "next/server";
 
-type RouteContext = {
-  params: Promise<{ promotionId: string }>;
-};
-
-export async function GET(request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest) {
   const accessToken = request.cookies.get("access_token")?.value;
 
   if (!accessToken) {
     return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   }
 
-  const { promotionId } = await context.params;
-  const response = await backendFetch(`/api/v1/scolarite/promotions/${promotionId}`, {
+  const response = await backendFetch(`/api/v1/scolarite/notes/${request.nextUrl.search}`, {
     cookies: { accessToken },
   });
   const data = await response.json().catch(() => ({}));
@@ -21,27 +16,26 @@ export async function GET(request: NextRequest, context: RouteContext) {
   return NextResponse.json(data, { status: response.status });
 }
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
+export async function POST(request: NextRequest) {
   const accessToken = request.cookies.get("access_token")?.value;
 
   if (!accessToken) {
     return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   }
 
-  const { promotionId } = await context.params;
   const body = await request.json().catch(() => null);
 
-  if (!body || typeof body.nom !== "string" || typeof body.annee_scolaire !== "string") {
+  if (!body || typeof body.examen_id !== "string" || typeof body.etudiant_id !== "string") {
     return NextResponse.json(
-      { detail: "Missing required fields: nom, annee_scolaire" },
+      { detail: "Missing required fields: examen_id, etudiant_id" },
       { status: 400 }
     );
   }
 
-  const response = await backendFetch(`/api/v1/scolarite/promotions/${promotionId}`, {
-    method: "PATCH",
+  const response = await backendFetch("/api/v1/scolarite/notes/", {
+    method: "POST",
     cookies: { accessToken },
-    body: { nom: body.nom.trim(), annee_scolaire: body.annee_scolaire.trim() },
+    body,
   });
   const data = await response.json().catch(() => ({}));
 

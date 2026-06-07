@@ -41,3 +41,29 @@ export async function backendFetch(
     return Response.json({ detail: "Backend unreachable" }, { status: 502 });
   }
 }
+
+export async function backendFormDataFetch(
+  path: string,
+  formData: FormData,
+  options: Omit<BackendFetchOptions, "body"> = {}
+): Promise<Response> {
+  const normalizedBaseUrl = env.EDUNOVA_API_URL.replace(/\/+$/, "");
+  const normalizedPath = path.replace(/^\/+|\/+$/g, "");
+  const url = `${normalizedBaseUrl}/${normalizedPath}`;
+
+  const headers = new Headers();
+
+  if (options.cookies?.accessToken) {
+    headers.set("Authorization", `Bearer ${options.cookies.accessToken}`);
+  }
+
+  try {
+    return await fetch(url, {
+      method: options.method ?? "POST",
+      headers,
+      body: formData,
+    });
+  } catch {
+    return Response.json({ detail: "Backend unreachable" }, { status: 502 });
+  }
+}

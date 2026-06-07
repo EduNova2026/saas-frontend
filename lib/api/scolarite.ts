@@ -1,6 +1,18 @@
 "use client";
 
 import { apiFetch } from "@/lib/api/http";
+import type {
+  EnseignantGroupeOut,
+  ExamenCreate,
+  ExamenOut,
+  GroupeUpdate,
+  NoteBatchCreate,
+  NoteCreate,
+  NoteOut,
+  NoteUpdate,
+  PromotionUpdate,
+  EtudiantUpdate,
+} from "@/types/scolarite";
 
 export interface PromotionOut {
   id: string;
@@ -16,6 +28,13 @@ export interface GroupeOut {
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+async function readError(response: Response, fallback: string): Promise<Error> {
+  const data = await response.json().catch(() => null);
+  const record = asRecord(data);
+  const detail = record?.detail;
+  return new Error(typeof detail === "string" ? detail : fallback);
 }
 
 function normalizePromotion(value: unknown): PromotionOut | null {
@@ -153,6 +172,29 @@ export async function createPromotion(
 
   if (!promotion) {
     throw new Error("La promotion a été créée, mais la réponse est invalide.");
+  }
+
+  return promotion;
+}
+
+export async function updatePromotion(
+  promotionId: string,
+  payload: PromotionUpdate
+): Promise<PromotionOut> {
+  const response = await apiFetch(`/api/scolarite/promotions/${promotionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de modifier la promotion.");
+  }
+
+  const promotion = normalizePromotion(await response.json());
+
+  if (!promotion) {
+    throw new Error("La promotion a été modifiée, mais la réponse est invalide.");
   }
 
   return promotion;
@@ -297,6 +339,29 @@ export async function createEtudiant(
   return etudiant;
 }
 
+export async function updateEtudiant(
+  etudiantId: string,
+  payload: EtudiantUpdate
+): Promise<EtudiantOut> {
+  const response = await apiFetch(`/api/scolarite/etudiants/${etudiantId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de modifier l'étudiant.");
+  }
+
+  const etudiant = normalizeEtudiant(await response.json());
+
+  if (!etudiant) {
+    throw new Error("L'étudiant a été modifié, mais la réponse est invalide.");
+  }
+
+  return etudiant;
+}
+
 export async function importEtudiants(
   promotionId: string,
   etudiants: Array<{ nom: string; prenom: string }>
@@ -417,6 +482,299 @@ export async function getGroupe(groupeId: string): Promise<GroupeOut> {
   }
 
   return groupe;
+}
+
+export async function updateGroupe(
+  groupeId: string,
+  payload: GroupeUpdate
+): Promise<GroupeOut> {
+  const response = await apiFetch(`/api/scolarite/groupes/${groupeId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de modifier le groupe.");
+  }
+
+  const groupe = normalizeGroupe(await response.json());
+
+  if (!groupe) {
+    throw new Error("Le groupe a été modifié, mais la réponse est invalide.");
+  }
+
+  return groupe;
+}
+
+function normalizeEnseignantGroupe(value: unknown): EnseignantGroupeOut | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const enseignantId = record.enseignant_id;
+  const groupeId = record.groupe_id;
+  const assignedBy = record.assigned_by ?? null;
+  const createdAt = record.created_at;
+
+  if (
+    typeof enseignantId !== "string" ||
+    typeof groupeId !== "string" ||
+    typeof createdAt !== "string" ||
+    (assignedBy !== null && typeof assignedBy !== "string")
+  ) {
+    return null;
+  }
+
+  return {
+    enseignant_id: enseignantId,
+    groupe_id: groupeId,
+    assigned_by: assignedBy,
+    created_at: createdAt,
+  };
+}
+
+function normalizeArray<T>(payload: unknown, normalize: (value: unknown) => T | null): T[] {
+  const record = asRecord(payload);
+  const candidates = Array.isArray(payload)
+    ? payload
+    : Array.isArray(record?.items)
+      ? record.items
+      : Array.isArray(record?.data)
+        ? record.data
+        : Array.isArray(record?.results)
+          ? record.results
+          : [];
+
+  return candidates.map(normalize).filter((item): item is T => item !== null);
+}
+
+export async function getGroupeEnseignants(
+  groupeId: string
+): Promise<EnseignantGroupeOut[]> {
+  const response = await apiFetch(`/api/scolarite/groupes/${groupeId}/enseignants`);
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger les enseignants du groupe.");
+  }
+
+  return normalizeArray(await response.json(), normalizeEnseignantGroupe);
+}
+
+function normalizeExamen(value: unknown): ExamenOut | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const id = record.id;
+  const enseignementId = record.enseignement_id;
+  const nom = record.nom;
+  const type = record.type;
+  const coefficient = record.coefficient;
+  const noteMax = record.note_max;
+  const dateExamen = record.date_examen ?? null;
+  const codeAurion = record.code_aurion ?? null;
+  const creePar = record.cree_par;
+  const createdAt = record.created_at;
+
+  if (
+    typeof id !== "string" ||
+    typeof enseignementId !== "string" ||
+    typeof nom !== "string" ||
+    typeof type !== "string" ||
+    typeof coefficient !== "number" ||
+    typeof noteMax !== "number" ||
+    typeof creePar !== "string" ||
+    typeof createdAt !== "string" ||
+    (dateExamen !== null && typeof dateExamen !== "string") ||
+    (codeAurion !== null && typeof codeAurion !== "string")
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    enseignement_id: enseignementId,
+    nom,
+    type,
+    coefficient,
+    note_max: noteMax,
+    date_examen: dateExamen,
+    code_aurion: codeAurion,
+    cree_par: creePar,
+    created_at: createdAt,
+  };
+}
+
+function normalizeNote(value: unknown): NoteOut | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const id = record.id;
+  const etudiantId = record.etudiant_id;
+  const examenId = record.examen_id;
+  const examen = normalizeExamen(record.examen);
+  const valeur = record.valeur ?? null;
+  const absent = record.absent;
+  const motifAbsence = record.motif_absence ?? null;
+  const dateSaisie = record.date_saisie;
+  const saisiPar = record.saisi_par;
+
+  if (
+    typeof id !== "string" ||
+    typeof etudiantId !== "string" ||
+    typeof examenId !== "string" ||
+    !examen ||
+    (valeur !== null && typeof valeur !== "number") ||
+    typeof absent !== "boolean" ||
+    (motifAbsence !== null && typeof motifAbsence !== "string") ||
+    typeof dateSaisie !== "string" ||
+    typeof saisiPar !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    etudiant_id: etudiantId,
+    examen_id: examenId,
+    examen,
+    valeur,
+    absent,
+    motif_absence: motifAbsence,
+    date_saisie: dateSaisie,
+    saisi_par: saisiPar,
+  };
+}
+
+export async function getExamens(params?: {
+  enseignement_id?: string;
+  skip?: number;
+  limit?: number;
+}): Promise<ExamenOut[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.enseignement_id) searchParams.set("enseignement_id", params.enseignement_id);
+  if (typeof params?.skip === "number") searchParams.set("skip", String(params.skip));
+  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+
+  const path = searchParams.size
+    ? `/api/scolarite/examens?${searchParams.toString()}`
+    : "/api/scolarite/examens";
+  const response = await apiFetch(path);
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger les examens.");
+  }
+
+  return normalizeArray(await response.json(), normalizeExamen);
+}
+
+export async function getExamen(examenId: string): Promise<ExamenOut> {
+  const response = await apiFetch(`/api/scolarite/examens/${examenId}`);
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger l'examen.");
+  }
+
+  const examen = normalizeExamen(await response.json());
+  if (!examen) throw new Error("La réponse examen est invalide.");
+  return examen;
+}
+
+export async function createExamen(payload: ExamenCreate): Promise<ExamenOut> {
+  const response = await apiFetch("/api/scolarite/examens", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de créer l'examen.");
+  }
+
+  const examen = normalizeExamen(await response.json());
+  if (!examen) throw new Error("L'examen a été créé, mais la réponse est invalide.");
+  return examen;
+}
+
+export async function getNotes(params?: {
+  examen_id?: string;
+  etudiant_id?: string;
+  enseignement_id?: string;
+  skip?: number;
+  limit?: number;
+}): Promise<NoteOut[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.examen_id) searchParams.set("examen_id", params.examen_id);
+  if (params?.etudiant_id) searchParams.set("etudiant_id", params.etudiant_id);
+  if (params?.enseignement_id) searchParams.set("enseignement_id", params.enseignement_id);
+  if (typeof params?.skip === "number") searchParams.set("skip", String(params.skip));
+  if (typeof params?.limit === "number") searchParams.set("limit", String(params.limit));
+
+  const path = searchParams.size
+    ? `/api/scolarite/notes?${searchParams.toString()}`
+    : "/api/scolarite/notes";
+  const response = await apiFetch(path);
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger les notes.");
+  }
+
+  return normalizeArray(await response.json(), normalizeNote);
+}
+
+export async function createNote(payload: NoteCreate): Promise<NoteOut> {
+  const response = await apiFetch("/api/scolarite/notes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible d'ajouter la note.");
+  }
+
+  const note = normalizeNote(await response.json());
+  if (!note) throw new Error("La note a été créée, mais la réponse est invalide.");
+  return note;
+}
+
+export async function createNotesBatch(payload: NoteBatchCreate): Promise<NoteOut[]> {
+  const response = await apiFetch("/api/scolarite/notes/batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible d'ajouter les notes.");
+  }
+
+  return normalizeArray(await response.json(), normalizeNote);
+}
+
+export async function updateNote(noteId: string, payload: NoteUpdate): Promise<NoteOut> {
+  const response = await apiFetch(`/api/scolarite/notes/${noteId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de modifier la note.");
+  }
+
+  const note = normalizeNote(await response.json());
+  if (!note) throw new Error("La note a été modifiée, mais la réponse est invalide.");
+  return note;
+}
+
+export async function deleteNote(noteId: string): Promise<void> {
+  const response = await apiFetch(`/api/scolarite/notes/${noteId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de supprimer la note.");
+  }
 }
 
 export async function getGroupeEtudiants(groupeId: string): Promise<EtudiantOut[]> {
