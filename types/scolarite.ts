@@ -14,13 +14,20 @@ export interface EtudiantOut {
   id: string;
   nom: string;
   prenom: string;
-  promotion_id: string;
+  promotion_id: string | null;
   utilisateur_id: string;
 }
 
 export interface EnseignantGroupeOut {
   enseignant_id: string;
   groupe_id: string;
+  assigned_by: string | null;
+  created_at: string;
+}
+
+export interface ResponsablePromotionOut {
+  responsable_id: string;
+  promotion_id: string;
   assigned_by: string | null;
   created_at: string;
 }
