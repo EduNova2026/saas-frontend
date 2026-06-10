@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BadgeCheck, IdCard, Loader2, Mail, Shield, UserRound } from "lucide-react";
+import { BadgeCheck, Loader2, Mail, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
@@ -81,13 +81,6 @@ export default function ProfilePage() {
                 Email
               </p>
               <p className="mt-1 font-semibold text-slate-900">{user.email}</p>
-            </div>
-            <div className="rounded-lg border bg-white p-4 sm:col-span-2">
-              <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-                <IdCard className="h-3.5 w-3.5" />
-                Identifiant
-              </p>
-              <p className="mt-1 break-all font-mono text-sm text-slate-700">{user.id}</p>
             </div>
           </CardContent>
         </Card>

@@ -55,4 +55,10 @@ sketch
 
 # End of https://www.toptal.com/developers/gitignore/api/nextjs,react
 
+# Local AI agent workspace and generated agent metadata
+.ai-agents/
+.claude/
 .omo/
+.gitnexus/
+AGENTS.md
+CLAUDE.md

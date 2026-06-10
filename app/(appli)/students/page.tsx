@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Mail, Search, User, ListTodo, GraduationCap, Loader2, ShieldAlert } from "lucide-react"
-import { getEtudiants, EtudiantOut } from "@/lib/api/scolarite"
+import { getEtudiants, getPromotions, EtudiantOut } from "@/lib/api/scolarite"
 import { useAuth } from "@/hooks/useAuth"
 
 const formatEmailPart = (value: string) =>
@@ -23,6 +23,7 @@ const formatEmailPart = (value: string) =>
 
 export default function StudentsPage() {
   const [etudiants, setEtudiants] = useState<EtudiantOut[]>([])
+  const [promotionMap, setPromotionMap] = useState<Map<string, string>>(new Map())
   const [recherche, setRecherche] = useState("")
   const [etudiantSelectionne, setEtudiantSelectionne] = useState<EtudiantOut | null>(null)
   const [loading, setLoading] = useState(true)
@@ -42,10 +43,11 @@ export default function StudentsPage() {
       try {
         setLoading(true)
         setError(null)
-        const response = await getEtudiants()
+        const [response, promotions] = await Promise.all([getEtudiants(), getPromotions()])
 
         if (actif) {
           setEtudiants(response.items ?? [])
+          setPromotionMap(new Map(promotions.map((promotion) => [promotion.id, promotion.nom])))
         }
       } catch {
         if (actif) {
@@ -86,7 +88,9 @@ export default function StudentsPage() {
             </Avatar>
             <div className="flex flex-col">
               <span className="font-semibold text-sm text-slate-900">{`${nom} ${prenom}`}</span>
-              <span className="text-xs text-slate-500">Promotion : {promotion_id}</span>
+              <span className="text-xs text-slate-500">
+                Promotion : {promotion_id ? (promotionMap.get(promotion_id) ?? "Promotion inconnue") : "Non assignée"}
+              </span>
             </div>
           </div>
         )
@@ -107,7 +111,7 @@ export default function StudentsPage() {
       header: "STATUT",
       cell: () => <span className="font-medium text-slate-500">—</span>,
     },
-  ], [])
+  ], [promotionMap])
 
   const table = useReactTable<EtudiantOut>({
     data: etudiants,
@@ -243,7 +247,7 @@ export default function StudentsPage() {
                   <div>
                     <h2 className="text-base font-bold text-slate-900">{`${etudiantSelectionne.prenom} ${etudiantSelectionne.nom}`}</h2>
                     <span className="text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full inline-block mt-0.5">
-                      Promotion : {etudiantSelectionne.promotion_id}
+                      Promotion : {etudiantSelectionne.promotion_id ? (promotionMap.get(etudiantSelectionne.promotion_id) ?? "Promotion inconnue") : "Non assignée"}
                     </span>
                   </div>
                 </div>

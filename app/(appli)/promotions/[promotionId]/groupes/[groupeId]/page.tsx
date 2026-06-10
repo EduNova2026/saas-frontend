@@ -62,6 +62,10 @@ function getParamValue(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
+function formatStudentName(prenom: string, nom: string): string {
+  return `${nom.toUpperCase()} ${prenom.charAt(0).toUpperCase()}${prenom.slice(1).toLowerCase()}`;
+}
+
 export default function GroupeManagementPage() {
   const params = useParams<{ promotionId: string; groupeId: string }>();
   const router = useRouter();
@@ -76,7 +80,6 @@ export default function GroupeManagementPage() {
   const [etudiantsPromotion, setEtudiantsPromotion] = useState<EtudiantOut[]>([]);
   const [examens, setExamens] = useState<ExamenOut[]>([]);
   const [notes, setNotes] = useState<NoteOut[]>([]);
-  const [enseignementId, setEnseignementId] = useState("");
   const [search, setSearch] = useState("");
   const [selectedEtudiantId, setSelectedEtudiantId] = useState("");
   const [dialogAddStudentOpen, setDialogAddStudentOpen] = useState(false);
@@ -131,8 +134,7 @@ export default function GroupeManagementPage() {
   }, [groupeId, promotionId]);
 
   const loadExamens = useCallback(async () => {
-    const value = enseignementId.trim();
-    if (!value) {
+    if (!groupeId) {
       setExamens([]);
       return;
     }
@@ -140,13 +142,13 @@ export default function GroupeManagementPage() {
     try {
       setLoadingExamens(true);
       setActionError(null);
-      setExamens(await getExamens({ enseignement_id: value }));
+      setExamens(await getExamens({ enseignement_id: groupeId }));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Impossible de charger les examens.");
     } finally {
       setLoadingExamens(false);
     }
-  }, [enseignementId]);
+  }, [groupeId]);
 
   useEffect(() => {
     if (authLoading || !canManagePromotions) {
@@ -167,7 +169,7 @@ export default function GroupeManagementPage() {
     if (!value) return etudiantsGroupe;
 
     return etudiantsGroupe.filter((etudiant) =>
-      `${etudiant.prenom} ${etudiant.nom}`.toLowerCase().includes(value)
+      formatStudentName(etudiant.prenom, etudiant.nom).toLowerCase().includes(value)
     );
   }, [etudiantsGroupe, search]);
 
@@ -226,7 +228,7 @@ export default function GroupeManagementPage() {
   };
 
   const handleUnassignEtudiant = async (etudiant: EtudiantOut) => {
-    if (!window.confirm(`Retirer ${etudiant.prenom} ${etudiant.nom} du groupe ?`)) return;
+    if (!window.confirm(`Retirer ${formatStudentName(etudiant.prenom, etudiant.nom)} du groupe ?`)) return;
     setSaving(true);
     setActionError(null);
 
@@ -244,8 +246,8 @@ export default function GroupeManagementPage() {
     const coefficient = Number(examCoefficient);
     const noteMax = Number(examNoteMax);
 
-    if (!enseignementId.trim() || !examNom.trim() || coefficient <= 0 || noteMax <= 0) {
-      setActionError("Renseignez un enseignement, un nom, un coefficient et une note maximale valides.");
+    if (!groupeId || !examNom.trim() || coefficient <= 0 || noteMax <= 0) {
+      setActionError("Renseignez un nom, un coefficient et une note maximale valides.");
       return;
     }
 
@@ -254,7 +256,7 @@ export default function GroupeManagementPage() {
 
     try {
       await createExamen({
-        enseignement_id: enseignementId.trim(),
+        enseignement_id: groupeId,
         nom: examNom.trim(),
         type: examType.trim() || "examen",
         coefficient,
@@ -344,8 +346,8 @@ export default function GroupeManagementPage() {
   };
 
   const handleUploadCsv = async () => {
-    if (!uploadFile || !enseignementId.trim() || !selectedExamen) {
-      setActionError("Sélectionnez un fichier CSV et renseignez l'enseignement.");
+    if (!uploadFile || !groupeId || !selectedExamen) {
+      setActionError("Sélectionnez un fichier CSV.");
       return;
     }
 
@@ -353,7 +355,7 @@ export default function GroupeManagementPage() {
     setActionError(null);
 
     try {
-      setLastImportJob(await uploadNotesCsv({ enseignementId: enseignementId.trim(), file: uploadFile }));
+      setLastImportJob(await uploadNotesCsv({ enseignementId: groupeId, file: uploadFile }));
       setUploadFile(null);
       await loadNotesForExamen(selectedExamen);
     } catch (err) {
@@ -460,7 +462,7 @@ export default function GroupeManagementPage() {
                     >
                       {etudiantsDisponibles.length > 0 ? (
                         etudiantsDisponibles.map((etudiant) => (
-                          <option key={etudiant.id} value={etudiant.id}>{etudiant.prenom} {etudiant.nom}</option>
+                          <option key={etudiant.id} value={etudiant.id}>{formatStudentName(etudiant.prenom, etudiant.nom)}</option>
                         ))
                       ) : (
                         <option>Aucun élève disponible</option>
@@ -482,18 +484,16 @@ export default function GroupeManagementPage() {
                   <TableHeader className="sticky top-0 z-10 border-b bg-slate-50">
                     <TableRow>
                       <TableHead>Élève</TableHead>
-                      <TableHead>Identifiant</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <LoadingRow colSpan={3} label="Chargement des élèves…" />
+                      <LoadingRow colSpan={2} label="Chargement des élèves…" />
                     ) : filteredEtudiants.length > 0 ? (
                       filteredEtudiants.map((etudiant) => (
                         <TableRow key={etudiant.id}>
-                          <TableCell className="font-medium text-slate-900">{etudiant.prenom} {etudiant.nom}</TableCell>
-                          <TableCell className="text-sm text-slate-500">{etudiant.id}</TableCell>
+                          <TableCell className="font-medium text-slate-900">{formatStudentName(etudiant.prenom, etudiant.nom)}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
                               <Button size="sm" variant="outline" className="gap-2" disabled>
@@ -509,7 +509,7 @@ export default function GroupeManagementPage() {
                         </TableRow>
                       ))
                     ) : (
-                      <EmptyRow colSpan={3} label="Aucun élève trouvé." />
+                      <EmptyRow colSpan={2} label="Aucun élève trouvé." />
                     )}
                   </TableBody>
                 </Table>
@@ -518,45 +518,43 @@ export default function GroupeManagementPage() {
           ) : (
             <section className="space-y-4">
               <Card className="border-blue-100 bg-blue-50/50">
-                <CardContent className="grid gap-3 py-4 lg:grid-cols-[1fr_auto_auto] lg:items-end">
-                  <div className="space-y-2">
-                    <label htmlFor="enseignement-id" className="text-sm font-medium text-slate-700">Enseignement lié au groupe</label>
-                    <Input id="enseignement-id" value={enseignementId} onChange={(event) => setEnseignementId(event.target.value)} placeholder="UUID enseignement" />
-                    <p className="text-xs text-slate-500">FOURNIR MANUELLEMENT l'UUID de l'enseignement 32 chiffres EM: A automatiser</p>
-                  </div>
-                  <Button variant="outline" onClick={() => void loadExamens()} disabled={!enseignementId.trim() || loadingExamens}>
-                    {loadingExamens ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Charger
-                  </Button>
-                  <Dialog open={dialogExamenOpen} onOpenChange={setDialogExamenOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="gap-2" disabled={!enseignementId.trim()}>
-                        <Plus className="h-4 w-4" />
-                        Créer un examen
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Créer un examen</DialogTitle>
-                        <DialogDescription>L&apos;examen sera rattaché à l&apos;enseignement renseigné.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <Input value={examNom} onChange={(event) => setExamNom(event.target.value)} placeholder="Nom" />
-                        <Input value={examType} onChange={(event) => setExamType(event.target.value)} placeholder="Type" />
-                        <Input type="number" min="0" step="0.1" value={examCoefficient} onChange={(event) => setExamCoefficient(event.target.value)} placeholder="Coefficient" />
-                        <Input type="number" min="1" step="0.1" value={examNoteMax} onChange={(event) => setExamNoteMax(event.target.value)} placeholder="Note max" />
-                        <Input type="date" value={examDate} onChange={(event) => setExamDate(event.target.value)} />
-                        <Input value={examCode} onChange={(event) => setExamCode(event.target.value)} placeholder="Code Aurion optionnel" />
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setDialogExamenOpen(false)} disabled={saving}>Annuler</Button>
-                        <Button onClick={handleCreateExamen} disabled={!examNom.trim() || saving}>
-                          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                          Créer
+                <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-slate-600">Les examens sont automatiquement rattachés à ce groupe.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => void loadExamens()} disabled={!groupeId || loadingExamens}>
+                      {loadingExamens ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Charger
+                    </Button>
+                    <Dialog open={dialogExamenOpen} onOpenChange={setDialogExamenOpen}>
+                      <DialogTrigger asChild>
+                        <Button className="gap-2" disabled={!groupeId}>
+                          <Plus className="h-4 w-4" />
+                          Créer un examen
                         </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Créer un examen</DialogTitle>
+                          <DialogDescription>L&apos;examen sera rattaché à l&apos;enseignement de ce groupe.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <Input value={examNom} onChange={(event) => setExamNom(event.target.value)} placeholder="Nom" />
+                          <Input value={examType} onChange={(event) => setExamType(event.target.value)} placeholder="Type" />
+                          <Input type="number" min="0" step="0.1" value={examCoefficient} onChange={(event) => setExamCoefficient(event.target.value)} placeholder="Coefficient" />
+                          <Input type="number" min="1" step="0.1" value={examNoteMax} onChange={(event) => setExamNoteMax(event.target.value)} placeholder="Note max" />
+                          <Input type="date" value={examDate} onChange={(event) => setExamDate(event.target.value)} />
+                          <Input value={examCode} onChange={(event) => setExamCode(event.target.value)} placeholder="Code Aurion optionnel" />
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setDialogExamenOpen(false)} disabled={saving}>Annuler</Button>
+                          <Button onClick={handleCreateExamen} disabled={!examNom.trim() || saving}>
+                            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Créer
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -597,7 +595,7 @@ export default function GroupeManagementPage() {
                         </TableRow>
                       ))
                     ) : (
-                      <EmptyRow colSpan={4} label={enseignementId.trim() ? "Aucun examen pour cet enseignement." : "Renseignez un enseignement pour charger les examens."} />
+                      <EmptyRow colSpan={4} label="Aucun examen pour ce groupe." />
                     )}
                   </TableBody>
                 </Table>
@@ -628,7 +626,7 @@ export default function GroupeManagementPage() {
                 >
                   <option value="">Sélectionner un élève</option>
                   {etudiantsSansNote.map((etudiant) => (
-                    <option key={etudiant.id} value={etudiant.id}>{etudiant.prenom} {etudiant.nom}</option>
+                    <option key={etudiant.id} value={etudiant.id}>{formatStudentName(etudiant.prenom, etudiant.nom)}</option>
                   ))}
                 </select>
                 <Input type="number" min="0" max={selectedExamen?.note_max ?? 20} step="0.1" value={noteValue} onChange={(event) => setNoteValue(event.target.value)} placeholder="Valeur" disabled={noteAbsent} />
@@ -653,11 +651,11 @@ export default function GroupeManagementPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <Input type="file" accept=".csv,text/csv" onChange={(event: ChangeEvent<HTMLInputElement>) => setUploadFile(event.target.files?.[0] ?? null)} />
-                <Button variant="outline" className="gap-2" onClick={handleUploadCsv} disabled={!uploadFile || saving || !enseignementId.trim()}>
+                <Button variant="outline" className="gap-2" onClick={handleUploadCsv} disabled={!uploadFile || saving || !groupeId}>
                   <FileUp className="h-4 w-4" />
                   Importer le CSV
                 </Button>
-                {lastImportJob ? <p className="text-sm text-slate-600">Import lancé: {lastImportJob.id}</p> : null}
+                {lastImportJob ? <p className="text-sm text-slate-600">Import CSV lancé</p> : null}
               </CardContent>
             </Card>
           </div>
@@ -678,7 +676,7 @@ export default function GroupeManagementPage() {
                     const etudiant = etudiantsGroupe.find((item) => item.id === note.etudiant_id);
                     return (
                       <TableRow key={note.id}>
-                        <TableCell className="font-medium text-slate-900">{etudiant ? `${etudiant.prenom} ${etudiant.nom}` : note.etudiant_id}</TableCell>
+                        <TableCell className="font-medium text-slate-900">{etudiant ? formatStudentName(etudiant.prenom, etudiant.nom) : "Étudiant inconnu"}</TableCell>
                         <TableCell>{note.absent ? "Absent" : `${note.valeur}/${note.examen.note_max}`}</TableCell>
                         <TableCell>{note.motif_absence ?? "-"}</TableCell>
                         <TableCell>
