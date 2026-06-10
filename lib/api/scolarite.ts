@@ -308,6 +308,28 @@ export async function getEtudiants(
   };
 }
 
+export async function getEtudiant(etudiantId: string): Promise<EtudiantOut> {
+  const response = await apiFetch(`/api/scolarite/etudiants/${etudiantId}`);
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error(
+        "Accès non autorisé. Vous ne disposez pas des permissions nécessaires pour consulter cet étudiant."
+      );
+    }
+    throw new Error("Impossible de charger l'étudiant depuis le serveur.");
+  }
+
+  const data = await response.json();
+  const etudiant = normalizeEtudiant(data);
+
+  if (!etudiant) {
+    throw new Error("La réponse étudiant est invalide.");
+  }
+
+  return etudiant;
+}
+
 export async function createEtudiant(
   promotionId: string,
   nom: string,
@@ -791,6 +813,22 @@ export async function getGroupeEtudiants(groupeId: string): Promise<EtudiantOut[
 
   const data = await response.json();
   return normalizeEtudiantsPayload(data);
+}
+
+export async function getEtudiantGroupes(etudiantId: string): Promise<GroupeOut[]> {
+  const response = await apiFetch(`/api/scolarite/etudiants/${etudiantId}/groupes`);
+
+  if (!response.ok) {
+    if (response.status === 403) {
+      throw new Error(
+        "Accès non autorisé. Vous ne disposez pas des permissions nécessaires pour consulter les groupes de cet étudiant."
+      );
+    }
+    throw new Error("Impossible de charger les groupes de l'étudiant.");
+  }
+
+  const data = await response.json();
+  return normalizeGroupesPayload(data);
 }
 
 export async function assignGroupeToPromotion(

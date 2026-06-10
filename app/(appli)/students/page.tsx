@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
-import { Mail, Search, User, ListTodo, GraduationCap, Loader2, ShieldAlert } from "lucide-react"
+import { Eye, Mail, Search, User, ListTodo, GraduationCap, Loader2, ShieldAlert } from "lucide-react"
 import { getEtudiants, EtudiantOut } from "@/lib/api/scolarite"
 import { useAuth } from "@/hooks/useAuth"
 
@@ -106,6 +106,18 @@ export default function StudentsPage() {
       id: "statut",
       header: "STATUT",
       cell: () => <span className="font-medium text-slate-500">—</span>,
+    },
+    {
+      id: "actions",
+      header: "ACTIONS",
+      cell: ({ row }) => (
+        <Button asChild size="sm" variant="outline" className="font-medium">
+          <Link href={`/students/${row.original.id}`}>
+            <Eye className="h-4 w-4" />
+            Voir
+          </Link>
+        </Button>
+      ),
     },
   ], [])
 
