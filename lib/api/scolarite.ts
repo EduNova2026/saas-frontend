@@ -11,8 +11,11 @@ import type {
   NoteOut,
   NoteUpdate,
   PromotionUpdate,
+  ResponsablePromotionOut,
   EtudiantUpdate,
 } from "@/types/scolarite";
+
+export type { EnseignantGroupeOut, ResponsablePromotionOut } from "@/types/scolarite";
 
 export interface PromotionOut {
   id: string;
@@ -79,7 +82,7 @@ function normalizeGroupe(value: unknown): GroupeOut | null {
 
   const id = record.id ?? record.groupe_id;
   const nom = record.nom ?? record.name ?? record.libelle;
-  const promotionId = record.promotion_id ?? record.promotionId;
+  const promotionId = "promotion_id" in record ? record.promotion_id : record.promotionId;
 
   if (typeof id !== "string" || typeof nom !== "string" || typeof promotionId !== "string") {
     return null;
@@ -204,7 +207,7 @@ export interface EtudiantOut {
   id: string;
   nom: string;
   prenom: string;
-  promotion_id: string;
+  promotion_id: string | null;
   utilisateur_id: string;
 }
 
@@ -222,7 +225,7 @@ function normalizeEtudiant(value: unknown): EtudiantOut | null {
     typeof id !== "string" ||
     typeof nom !== "string" ||
     typeof prenom !== "string" ||
-    typeof promotionId !== "string" ||
+    (promotionId !== null && typeof promotionId !== "string") ||
     typeof utilisateurId !== "string"
   ) {
     return null;
@@ -384,6 +387,16 @@ export async function updateEtudiant(
   return etudiant;
 }
 
+export async function removeEtudiantFromPromotion(etudiantId: string): Promise<void> {
+  const response = await apiFetch(`/api/scolarite/etudiants/${etudiantId}/promotion`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de retirer l'étudiant de la promotion.");
+  }
+}
+
 export async function importEtudiants(
   promotionId: string,
   etudiants: Array<{ nom: string; prenom: string }>
@@ -466,6 +479,13 @@ export async function createPromotionGroupe(
   }
 
   return groupe;
+}
+
+export async function createGroupe(
+  promotionId: string,
+  nom: string
+): Promise<GroupeOut> {
+  return createPromotionGroupe(promotionId, nom);
 }
 
 export async function getGroupes(): Promise<GroupeOut[]> {
@@ -555,6 +575,32 @@ function normalizeEnseignantGroupe(value: unknown): EnseignantGroupeOut | null {
   };
 }
 
+function normalizeResponsablePromotion(value: unknown): ResponsablePromotionOut | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const responsableId = record.responsable_id;
+  const promotionId = record.promotion_id;
+  const assignedBy = record.assigned_by ?? null;
+  const createdAt = record.created_at;
+
+  if (
+    typeof responsableId !== "string" ||
+    typeof promotionId !== "string" ||
+    typeof createdAt !== "string" ||
+    (assignedBy !== null && typeof assignedBy !== "string")
+  ) {
+    return null;
+  }
+
+  return {
+    responsable_id: responsableId,
+    promotion_id: promotionId,
+    assigned_by: assignedBy,
+    created_at: createdAt,
+  };
+}
+
 function normalizeArray<T>(payload: unknown, normalize: (value: unknown) => T | null): T[] {
   const record = asRecord(payload);
   const candidates = Array.isArray(payload)
@@ -577,6 +623,18 @@ export async function getGroupeEnseignants(
 
   if (!response.ok) {
     throw await readError(response, "Impossible de charger les enseignants du groupe.");
+  }
+
+  return normalizeArray(await response.json(), normalizeEnseignantGroupe);
+}
+
+export async function getEnseignantGroupes(
+  enseignantId: string
+): Promise<EnseignantGroupeOut[]> {
+  const response = await apiFetch(`/api/scolarite/enseignants/${enseignantId}/groupes`);
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger les groupes de l'enseignant.");
   }
 
   return normalizeArray(await response.json(), normalizeEnseignantGroupe);
@@ -896,5 +954,47 @@ export async function unassignEtudiantFromGroupe(
     }
     const err = await response.json().catch(() => ({}));
     throw new Error(err?.detail || "Impossible de retirer l'étudiant du groupe.");
+  }
+}
+
+export async function getResponsablePromotions(
+  responsableId: string
+): Promise<ResponsablePromotionOut[]> {
+  const response = await apiFetch(`/api/scolarite/responsables/${responsableId}/promotions`);
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger les promotions du responsable.");
+  }
+
+  return normalizeArray(await response.json(), normalizeResponsablePromotion);
+}
+
+export async function assignEnseignantToGroupe(
+  groupeId: string,
+  enseignantId: string
+): Promise<EnseignantGroupeOut> {
+  const response = await apiFetch(`/api/scolarite/groupes/${groupeId}/enseignants/${enseignantId}`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible d'attribuer l'enseignant au groupe.");
+  }
+
+  const enseignantGroupe = normalizeEnseignantGroupe(await response.json());
+  if (!enseignantGroupe) throw new Error("La réponse attribution d'enseignant est invalide.");
+  return enseignantGroupe;
+}
+
+export async function unassignEnseignantFromGroupe(
+  groupeId: string,
+  enseignantId: string
+): Promise<void> {
+  const response = await apiFetch(`/api/scolarite/groupes/${groupeId}/enseignants/${enseignantId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de retirer l'enseignant du groupe.");
   }
 }
