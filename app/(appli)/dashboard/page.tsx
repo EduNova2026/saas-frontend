@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { getEtudiants, EtudiantOut } from "@/lib/api/scolarite"
+import { getEtudiants, getPromotions, EtudiantOut } from "@/lib/api/scolarite"
 import { useAuth } from "@/hooks/useAuth"
 import { ShieldAlert } from "lucide-react"
 
@@ -26,6 +26,7 @@ const donneesGraphique = [
 
 export default function DashboardPage() {
   const [etudiants, setEtudiants] = useState<EtudiantOut[]>([])
+  const [promotionMap, setPromotionMap] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { hasRole, loading: authLoading } = useAuth()
@@ -43,10 +44,11 @@ export default function DashboardPage() {
       try {
         setLoading(true)
         setError(null)
-        const response = await getEtudiants()
+        const [response, promotions] = await Promise.all([getEtudiants(), getPromotions()])
 
         if (actif) {
           setEtudiants(response.items ?? [])
+          setPromotionMap(new Map(promotions.map((promotion) => [promotion.id, promotion.nom])))
         }
       } catch {
         if (actif) {
@@ -76,7 +78,9 @@ export default function DashboardPage() {
         return (
           <div className="flex flex-col">
             <span className="font-semibold text-sm text-slate-900">{`${nom} ${prenom}`}</span>
-            <span className="text-xs text-muted-foreground">Promotion : {promotion_id}</span>
+            <span className="text-xs text-muted-foreground">
+              Promotion : {promotion_id ? (promotionMap.get(promotion_id) ?? "Promotion inconnue") : "Non assignée"}
+            </span>
           </div>
         )
       },
@@ -101,7 +105,7 @@ export default function DashboardPage() {
       header: "STATUT",
       cell: () => <span className="text-slate-500 text-sm">—</span>,
     },
-  ], [])
+  ], [promotionMap])
 
   const table = useReactTable<EtudiantOut>({
     data: etudiants,
@@ -162,9 +166,9 @@ export default function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Moyenne de classe</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Étudiants analysés</CardTitle></CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold mb-2">N/A</p>
+            <p className="text-3xl font-bold mb-2">{loading ? "…" : (etudiants ?? []).length}</p>
           </CardContent>
         </Card>
 

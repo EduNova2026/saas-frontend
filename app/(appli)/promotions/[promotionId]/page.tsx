@@ -40,20 +40,75 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   createEtudiant,
   createPromotionGroupe,
+  getNotes,
   getPromotion,
   getPromotionEtudiants,
   getPromotionGroupes,
+  removeEtudiantFromPromotion,
   updateEtudiant,
   updateGroupe,
   type EtudiantOut,
   type GroupeOut,
   type PromotionOut,
 } from "@/lib/api/scolarite";
+import type { NoteOut } from "@/types/scolarite";
 
 type Tab = "groupes" | "etudiants";
 
 function getParamValue(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+async function loadNotes(etudiantIds: string[]) {
+  const allNotes: NoteOut[] = [];
+
+  for (const id of etudiantIds) {
+    try {
+      const notes = await getNotes({ etudiant_id: id, limit: 1000 });
+      allNotes.push(...notes);
+    } catch {}
+  }
+
+  return allNotes;
+}
+
+function computeAverage(notes: NoteOut[], etudiantId: string): number | null {
+  const studentNotes = notes.filter((note) => note.etudiant_id === etudiantId && !note.absent && note.valeur !== null);
+  if (studentNotes.length === 0) return null;
+
+  const sum = studentNotes.reduce((acc, note) => {
+    const normalized = (note.valeur! / note.examen.note_max) * 20;
+    return acc + normalized;
+  }, 0);
+
+  return sum / studentNotes.length;
+}
+
+function computePromotionStats(notes: NoteOut[], etudiantIds: string[]) {
+  const averages = etudiantIds
+    .map((id) => computeAverage(notes, id))
+    .filter((average): average is number => average !== null);
+
+  if (averages.length === 0) {
+    return { moyenneGenerale: null, tauxReussite: null };
+  }
+
+  const moyenneGenerale = averages.reduce((sum, average) => sum + average, 0) / averages.length;
+  const tauxReussite = (averages.filter((average) => average >= 10).length / averages.length) * 100;
+
+  return { moyenneGenerale, tauxReussite };
+}
+
+function formatAverage(value: number | null) {
+  return value === null ? "—" : `${value.toFixed(1)}/20`;
+}
+
+function formatPercent(value: number | null) {
+  return value === null ? "—" : `${Math.round(value)}%`;
+}
+
+function formatStudentName(prenom: string, nom: string): string {
+  return `${nom.toUpperCase()} ${prenom.charAt(0).toUpperCase()}${prenom.slice(1).toLowerCase()}`;
 }
 
 export default function PromotionDashboardPage() {
@@ -81,6 +136,8 @@ export default function PromotionDashboardPage() {
   const [editingGroupe, setEditingGroupe] = useState<GroupeOut | null>(null);
   const [editNom, setEditNom] = useState("");
   const [editPrenom, setEditPrenom] = useState("");
+  const [moyenneGenerale, setMoyenneGenerale] = useState<number | null>(null);
+  const [tauxReussite, setTauxReussite] = useState<number | null>(null);
 
   const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
   const canManagePromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
@@ -96,9 +153,13 @@ export default function PromotionDashboardPage() {
         getPromotionEtudiants(promotionId),
         getPromotionGroupes(promotionId),
       ]);
+      const notesData = await loadNotes(etudiantsData.map((etudiant) => etudiant.id));
+      const stats = computePromotionStats(notesData, etudiantsData.map((etudiant) => etudiant.id));
       setPromotion(promotionData);
       setEtudiants(etudiantsData);
       setGroupes(groupesData);
+      setMoyenneGenerale(stats.moyenneGenerale);
+      setTauxReussite(stats.tauxReussite);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger la promotion.");
     } finally {
@@ -117,7 +178,7 @@ export default function PromotionDashboardPage() {
     if (!value) return etudiants;
 
     return etudiants.filter((etudiant) =>
-      `${etudiant.prenom} ${etudiant.nom}`.toLowerCase().includes(value)
+      formatStudentName(etudiant.prenom, etudiant.nom).toLowerCase().includes(value)
     );
   }, [etudiants, search]);
 
@@ -209,6 +270,25 @@ export default function PromotionDashboardPage() {
     }
   };
 
+  const handleRemoveStudent = async (etudiant: EtudiantOut) => {
+    const confirmed = window.confirm(
+      `Retirer ${etudiant.nom} ${etudiant.prenom} de cette promotion ?`
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    setActionError(null);
+
+    try {
+      await removeEtudiantFromPromotion(etudiant.id);
+      await loadPromotion();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Impossible de retirer l'étudiant.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -259,8 +339,8 @@ export default function PromotionDashboardPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard title="Étudiants" value={loading ? "…" : String(etudiants.length)} icon={<Users />} />
         <StatCard title="Groupes" value={loading ? "…" : String(groupes.length)} icon={<GraduationCap />} />
-        <StatCard title="Moyenne générale" value="À venir" icon={<TrendingUp />} />
-        <StatCard title="Taux de réussite" value="À venir" icon={<TrendingUp />} />
+        <StatCard title="Moyenne de la promotion" value={loading ? "…" : formatAverage(moyenneGenerale)} icon={<TrendingUp />} />
+        <StatCard title="Taux de réussite" value={loading ? "…" : formatPercent(tauxReussite)} icon={<TrendingUp />} />
       </div>
 
       {error || actionError ? (
@@ -314,18 +394,16 @@ export default function PromotionDashboardPage() {
                   <TableHeader className="sticky top-0 z-10 border-b bg-slate-50">
                     <TableRow>
                       <TableHead>Groupe</TableHead>
-                      <TableHead>Identifiant</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <LoadingRow colSpan={3} label="Chargement des groupes…" />
+                      <LoadingRow colSpan={2} label="Chargement des groupes…" />
                     ) : groupes.length > 0 ? (
                       groupes.map((groupe) => (
                         <TableRow key={groupe.id}>
                           <TableCell className="font-medium text-slate-900">{groupe.nom}</TableCell>
-                          <TableCell className="text-sm text-slate-500">{groupe.id}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
                               <Button asChild size="sm" variant="outline" className="gap-2">
@@ -343,7 +421,7 @@ export default function PromotionDashboardPage() {
                         </TableRow>
                       ))
                     ) : (
-                      <EmptyRow colSpan={3} label="Aucun groupe dans cette promotion." />
+                      <EmptyRow colSpan={2} label="Aucun groupe dans cette promotion." />
                     )}
                   </TableBody>
                 </Table>
@@ -389,20 +467,18 @@ export default function PromotionDashboardPage() {
                   <TableHeader className="sticky top-0 z-10 border-b bg-slate-50">
                     <TableRow>
                       <TableHead>Étudiant</TableHead>
-                      <TableHead>Identifiant</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <LoadingRow colSpan={3} label="Chargement des étudiants…" />
+                      <LoadingRow colSpan={2} label="Chargement des étudiants…" />
                     ) : filteredEtudiants.length > 0 ? (
                       filteredEtudiants.map((etudiant) => (
                         <TableRow key={etudiant.id}>
                           <TableCell className="font-medium text-slate-900">
-                            {etudiant.prenom} {etudiant.nom}
+                            {formatStudentName(etudiant.prenom, etudiant.nom)}
                           </TableCell>
-                          <TableCell className="text-sm text-slate-500">{etudiant.id}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
                               <Button size="sm" variant="outline" className="gap-2" disabled>
@@ -413,12 +489,21 @@ export default function PromotionDashboardPage() {
                                 <Pencil className="h-4 w-4" />
                                 Modifier
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                                disabled={saving}
+                                onClick={() => void handleRemoveStudent(etudiant)}
+                              >
+                                Retirer
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
                       ))
                     ) : (
-                      <EmptyRow colSpan={3} label="Aucun étudiant dans cette promotion." />
+                      <EmptyRow colSpan={2} label="Aucun étudiant dans cette promotion." />
                     )}
                   </TableBody>
                 </Table>
