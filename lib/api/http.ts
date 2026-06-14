@@ -32,7 +32,10 @@ export async function apiFetch(
   let response: Response;
 
   try {
-    response = await fetch(path, options);
+    response = await fetch(path, {
+      credentials: "include",
+      ...options,
+    });
   } catch {
     throw new Error("Unable to reach the server. Please check your connection and try again.");
   }
@@ -49,7 +52,10 @@ export async function apiFetch(
   }
 
   try {
-    return await fetch(path, options);
+    return await fetch(path, {
+      credentials: "include",
+      ...options,
+    });
   } catch {
     throw new Error("Unable to reach the server. Please check your connection and try again.");
   }
