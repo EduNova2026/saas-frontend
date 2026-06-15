@@ -87,6 +87,7 @@ export default function MesGroupeDashboardPage() {
   const [search, setSearch] = useState("");
   const [selectedExamen, setSelectedExamen] = useState<ExamenOut | null>(null);
   const [dialogCsvOpen, setDialogCsvOpen] = useState(false);
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
   const [noteEtudiantId, setNoteEtudiantId] = useState("");
   const [noteValue, setNoteValue] = useState("");
   const [noteAbsent, setNoteAbsent] = useState(false);
@@ -233,6 +234,11 @@ export default function MesGroupeDashboardPage() {
     }
   };
 
+  const openNotesDialog = async (examen: ExamenOut) => {
+    setNotesDialogOpen(true);
+    await loadNotesForExamen(examen);
+  };
+
   const handleSaveNote = async () => {
     if (!selectedExamen) return;
     const numericValue = Number(noteValue);
@@ -327,7 +333,7 @@ export default function MesGroupeDashboardPage() {
       setActionError(err instanceof Error ? err.message : "Impossible d'importer les notes.");
     } finally {
       setSaving(false);
-    }
+    } 
   };
 
   if (authLoading || (hasTeacherRole && !assignmentChecked)) {
@@ -469,7 +475,7 @@ export default function MesGroupeDashboardPage() {
                           <TableCell>{examen.date_examen ?? "Non renseignée"}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
-                              <Button size="sm" variant="outline" className="gap-2" onClick={() => void loadNotesForExamen(examen)}>
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => void openNotesDialog(examen)}>
                                 <ClipboardList className="h-4 w-4" />
                                 Notes
                               </Button>
@@ -513,7 +519,15 @@ export default function MesGroupeDashboardPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={selectedExamen !== null} onOpenChange={(open) => !open && setSelectedExamen(null)}>
+      <Dialog
+        open={notesDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setNotesDialogOpen(false);
+            setSelectedExamen(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Notes de {selectedExamen?.nom}</DialogTitle>
