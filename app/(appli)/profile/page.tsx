@@ -47,7 +47,7 @@ export default function ProfilePage() {
 
   const canSeeDashboard = hasRole("responsable_pedagogique");
   const canSeePromotions =
-    hasRole("responsable_pedagogique") || hasRole("admin") || hasRole("admin_pedagogique");
+    hasRole("responsable_pedagogique") || hasRole("admin_pedagogique");
 
   return (
     <main className="min-h-screen space-y-6 bg-slate-50 p-10">

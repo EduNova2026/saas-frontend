@@ -56,7 +56,7 @@ export default function PromotionsPage() {
   const [editAnneeScolaire, setEditAnneeScolaire] = useState("");
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
-  const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
+  const isAdminPedagogique = hasRole("admin_pedagogique");
   const canAccessPromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
 
   const chargerPromotions = useCallback(async () => {

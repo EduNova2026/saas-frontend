@@ -122,7 +122,7 @@ export default function MesPromotionDetailPage() {
   const [isAssigned, setIsAssigned] = useState<boolean | null>(null);
   const [moyenneGenerale, setMoyenneGenerale] = useState<number | null>(null);
 
-  const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
+  const isAdminPedagogique = hasRole("admin_pedagogique");
   const canAccess = hasRole("responsable_pedagogique") || isAdminPedagogique;
   const userId = user?.id;
 
