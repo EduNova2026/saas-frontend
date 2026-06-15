@@ -931,6 +931,39 @@ export async function getResponsablePromotions(
   return normalizeArray(await response.json(), normalizeResponsablePromotion);
 }
 
+export async function assignResponsableToPromotion(
+  promotionId: string,
+  responsableId: string
+): Promise<ResponsablePromotionOut> {
+  const response = await apiFetch(`/api/scolarite/promotions/${promotionId}/responsables/${responsableId}`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible d'assigner le responsable à la promotion.");
+  }
+
+  const responsablePromotion = normalizeResponsablePromotion(await response.json());
+  if (!responsablePromotion) {
+    throw new Error("La réponse d'assignation de responsable est invalide.");
+  }
+
+  return responsablePromotion;
+}
+
+export async function unassignResponsableFromPromotion(
+  promotionId: string,
+  responsableId: string
+): Promise<void> {
+  const response = await apiFetch(`/api/scolarite/promotions/${promotionId}/responsables/${responsableId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de retirer le responsable de la promotion.");
+  }
+}
+
 export async function assignEnseignantToGroupe(
   groupeId: string,
   enseignantId: string

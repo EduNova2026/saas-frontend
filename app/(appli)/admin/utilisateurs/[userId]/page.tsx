@@ -26,7 +26,10 @@ import {
   getEnseignantGroupes,
   getGroupe,
   getPromotion,
+  getPromotions,
   getResponsablePromotions,
+  assignResponsableToPromotion,
+  unassignResponsableFromPromotion,
   type GroupeOut,
   type PromotionOut,
 } from "@/lib/api/scolarite";
@@ -81,6 +84,8 @@ export default function AdminUtilisateurProfilePage() {
   const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set());
   const [groupAssignments, setGroupAssignments] = useState<GroupeAssignment[]>([]);
   const [promotionAssignments, setPromotionAssignments] = useState<PromotionAssignment[]>([]);
+  const [allPromotions, setAllPromotions] = useState<PromotionOut[]>([]);
+  const [selectedPromotionId, setSelectedPromotionId] = useState("");
   const [loading, setLoading] = useState(true);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,8 +102,11 @@ export default function AdminUtilisateurProfilePage() {
     return names;
   }, [userRoles, utilisateur]);
 
+  const responsableRoleId = roles.find((role) => role.libelle === "responsable_pedagogique")?.id;
   const hasEnseignantRole = activeRoleNames.has("enseignant");
   const hasResponsablePedagogiqueRole = activeRoleNames.has("responsable_pedagogique");
+  const hasResponsablePedagogiqueSelected = responsableRoleId ? selectedRoles.has(responsableRoleId) : false;
+  const canManagePromotionAssignments = hasResponsablePedagogiqueRole || hasResponsablePedagogiqueSelected;
 
   const loadAssignments = useCallback(
     async (roleNames: Set<string>) => {
@@ -150,10 +158,11 @@ export default function AdminUtilisateurProfilePage() {
       setError(null);
       setRoleError(null);
 
-      const [loadedUser, loadedRoles, loadedUserRoles] = await Promise.all([
+      const [loadedUser, loadedRoles, loadedUserRoles, promotions] = await Promise.all([
         getUser(userId),
         getRoles(),
         getUserRoles(userId),
+        getPromotions(),
       ]);
 
       const loadedRoleNames = new Set<string>();
@@ -166,6 +175,7 @@ export default function AdminUtilisateurProfilePage() {
       setRoles(loadedRoles);
       setUserRoles(loadedUserRoles);
       setSelectedRoles(new Set(loadedUserRoles.map((role) => role.role_id)));
+      setAllPromotions(promotions);
       await loadAssignments(loadedRoleNames);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger le profil utilisateur.");
@@ -173,6 +183,47 @@ export default function AdminUtilisateurProfilePage() {
       setLoading(false);
     }
   }, [loadAssignments, userId]);
+
+  const availablePromotions = useMemo(
+    () => allPromotions.filter(
+      (promotion) => !promotionAssignments.some((assignment) => assignment.promotion_id === promotion.id)
+    ),
+    [allPromotions, promotionAssignments]
+  );
+
+  const handleAssignPromotion = async () => {
+    if (!selectedPromotionId) {
+      setRoleError("Sélectionnez une promotion à assigner.");
+      return;
+    }
+
+    setSaving(true);
+    setRoleError(null);
+
+    try {
+      await assignResponsableToPromotion(selectedPromotionId, userId);
+      setSelectedPromotionId("");
+      await loadAssignments(activeRoleNames);
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : "Impossible d'assigner la promotion.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUnassignPromotion = async (promotionId: string) => {
+    setSaving(true);
+    setRoleError(null);
+
+    try {
+      await unassignResponsableFromPromotion(promotionId, userId);
+      await loadAssignments(activeRoleNames);
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : "Impossible de retirer la promotion.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -419,17 +470,58 @@ export default function AdminUtilisateurProfilePage() {
                   {promotionAssignments.length > 0 ? (
                     promotionAssignments.map((assignment) => (
                       <div key={assignment.promotion_id} className="rounded-lg border bg-white p-4">
-                        <p className="font-semibold text-slate-900">
-                          {assignment.promotion?.nom ?? "Promotion indisponible"}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          Année : {assignment.promotion?.annee_scolaire ?? "Non renseignée"}
-                        </p>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-900">
+                              {assignment.promotion?.nom ?? "Promotion indisponible"}
+                            </p>
+                            <p className="text-sm text-slate-500">
+                              Année : {assignment.promotion?.annee_scolaire ?? "Non renseignée"}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={() => void handleUnassignPromotion(assignment.promotion_id)}
+                            disabled={saving}
+                          >
+                            Retirer
+                          </Button>
+                        </div>
                       </div>
                     ))
                   ) : (
                     <p className="text-sm text-slate-500">Aucune promotion assignée.</p>
                   )}
+                </CardContent>
+              </Card>
+            ) : null}
+            {canManagePromotionAssignments ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Shield className="h-5 w-5 text-blue-600" />
+                    Assigner une promotion
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <select
+                    value={selectedPromotionId}
+                    onChange={(event) => setSelectedPromotionId(event.target.value)}
+                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                  >
+                    <option value="">Sélectionnez une promotion</option>
+                    {availablePromotions.map((promotion) => (
+                      <option key={promotion.id} value={promotion.id}>
+                        {promotion.nom} ({promotion.annee_scolaire})
+                      </option>
+                    ))}
+                  </select>
+                  <Button onClick={handleAssignPromotion} disabled={!selectedPromotionId || saving || availablePromotions.length === 0}>
+                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Assigner
+                  </Button>
                 </CardContent>
               </Card>
             ) : null}

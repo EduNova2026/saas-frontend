@@ -81,14 +81,19 @@ export async function getImportJob(jobId: string): Promise<ImportJobOut> {
 }
 
 export async function uploadNotesCsv(params: {
-  enseignementId: string;
   file: File;
+  examenId?: string;
+  enseignementId?: string;
 }): Promise<ImportJobOut> {
   const formData = new FormData();
   formData.set("file", params.file);
 
+  const query = params.examenId
+    ? `examen_id=${encodeURIComponent(params.examenId)}`
+    : `enseignement_id=${encodeURIComponent(params.enseignementId ?? "")}`;
+
   const response = await apiFetch(
-    `/api/imports/upload?enseignement_id=${encodeURIComponent(params.enseignementId)}`,
+    `/api/imports/upload?${query}`,
     {
       method: "POST",
       body: formData,

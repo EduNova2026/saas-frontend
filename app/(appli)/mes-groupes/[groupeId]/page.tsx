@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -85,6 +86,7 @@ export default function MesGroupeDashboardPage() {
   const [notes, setNotes] = useState<NoteOut[]>([]);
   const [search, setSearch] = useState("");
   const [selectedExamen, setSelectedExamen] = useState<ExamenOut | null>(null);
+  const [dialogCsvOpen, setDialogCsvOpen] = useState(false);
   const [noteEtudiantId, setNoteEtudiantId] = useState("");
   const [noteValue, setNoteValue] = useState("");
   const [noteAbsent, setNoteAbsent] = useState(false);
@@ -299,6 +301,13 @@ export default function MesGroupeDashboardPage() {
     }
   };
 
+  const openCsvDialog = (examen: ExamenOut) => {
+    setSelectedExamen(examen);
+    setDialogCsvOpen(true);
+    setActionError(null);
+    setUploadFile(null);
+  };
+
   const handleUploadCsv = async () => {
     if (!uploadFile || !selectedExamen) {
       setActionError("Sélectionnez un examen et un fichier CSV.");
@@ -309,7 +318,7 @@ export default function MesGroupeDashboardPage() {
     setActionError(null);
 
     try {
-      const job = await uploadNotesCsv({ enseignementId: selectedExamen.enseignement_id, file: uploadFile });
+      const job = await uploadNotesCsv({ examenId: selectedExamen.id, file: uploadFile });
       setLastImportStatus(formatImportStatus(job));
       setUploadFile(null);
       await loadNotesForExamen(selectedExamen);
@@ -459,10 +468,16 @@ export default function MesGroupeDashboardPage() {
                           <TableCell>{examen.note_max} pts · coef. {examen.coefficient}</TableCell>
                           <TableCell>{examen.date_examen ?? "Non renseignée"}</TableCell>
                           <TableCell>
-                            <Button size="sm" variant="outline" className="gap-2" onClick={() => void loadNotesForExamen(examen)}>
-                              <ClipboardList className="h-4 w-4" />
-                              Notes
-                            </Button>
+                            <div className="flex flex-wrap gap-2">
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => void loadNotesForExamen(examen)}>
+                                <ClipboardList className="h-4 w-4" />
+                                Notes
+                              </Button>
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => openCsvDialog(examen)}>
+                                <FileUp className="h-4 w-4" />
+                                Importer
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
@@ -476,6 +491,27 @@ export default function MesGroupeDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={dialogCsvOpen} onOpenChange={(open) => !open && setDialogCsvOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Importer les notes CSV</DialogTitle>
+            <DialogDescription>
+              Importez un fichier CSV pour l'examen {selectedExamen?.nom}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input type="file" accept=".csv,text/csv" onChange={(event: ChangeEvent<HTMLInputElement>) => setUploadFile(event.target.files?.[0] ?? null)} />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogCsvOpen(false)} disabled={saving}>Annuler</Button>
+              <Button onClick={handleUploadCsv} disabled={!uploadFile || saving || !selectedExamen}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Importer
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={selectedExamen !== null} onOpenChange={(open) => !open && setSelectedExamen(null)}>
         <DialogContent className="max-w-4xl">
