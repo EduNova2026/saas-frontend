@@ -139,7 +139,7 @@ export default function PromotionDashboardPage() {
   const [moyenneGenerale, setMoyenneGenerale] = useState<number | null>(null);
   const [tauxReussite, setTauxReussite] = useState<number | null>(null);
 
-  const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
+  const isAdminPedagogique = hasRole("admin_pedagogique");
   const canManagePromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
 
   const loadPromotion = useCallback(async () => {

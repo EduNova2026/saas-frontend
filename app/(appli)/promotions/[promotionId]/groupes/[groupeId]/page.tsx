@@ -113,7 +113,7 @@ export default function GroupeManagementPage() {
   const [groupTeachers, setGroupTeachers] = useState<EnseignantGroupeOut[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
 
-  const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
+  const isAdminPedagogique = hasRole("admin_pedagogique");
   const canManagePromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
 
   const loadGroupe = useCallback(async () => {

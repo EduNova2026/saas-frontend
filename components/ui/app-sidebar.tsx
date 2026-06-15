@@ -24,9 +24,9 @@ interface NavItem {
 
 const allNavItems: NavItem[] = [
   { title: "Mon profil", url: "/profile", icon: UserRound },
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: ["responsable_pedagogique"] },
-  { title: "Étudiants", url: "/students", icon: Users, roles: ["responsable_pedagogique"] },
-  { title: "Promotions", url: "/promotions", icon: GraduationCap, roles: ["responsable_pedagogique", "admin", "admin_pedagogique"] },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: ["responsable_pedagogique", "enseignant", "admin_pedagogique"] },
+  { title: "Étudiants", url: "/students", icon: Users, roles: ["responsable_pedagogique", "admin_pedagogique"] },
+  { title: "Promotions", url: "/promotions", icon: GraduationCap, roles: ["responsable_pedagogique", "admin_pedagogique"] },
   { title: "Mes groupes", url: "/mes-groupes", icon: BookOpen, roles: ["enseignant"] },
   { title: "Mes promotions", url: "/mes-promotions", icon: School, roles: ["responsable_pedagogique"] },
   { title: "Utilisateurs", url: "/admin/utilisateurs", icon: Shield, roles: ["admin_pedagogique"] },

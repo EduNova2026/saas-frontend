@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   const user = await meResponse.json();
   const roles: string[] = user.roles ?? [];
 
-  const isAdmin = roles.includes("admin") || roles.includes("admin_pedagogique");
+  const isAdmin = roles.includes("admin_pedagogique");
   const isRP = roles.includes("responsable_pedagogique");
 
   if (!isAdmin && !isRP) {
