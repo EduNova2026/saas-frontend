@@ -116,6 +116,7 @@ export default function MesPromotionDetailPage() {
   const [saving, setSaving] = useState(false);
   const [dialogGroupeOpen, setDialogGroupeOpen] = useState(false);
   const [nomGroupe, setNomGroupe] = useState("");
+  const [createGroupeTeacherId, setCreateGroupeTeacherId] = useState("");
   const [editingGroupe, setEditingGroupe] = useState<GroupeOut | null>(null);
   const [editNomGroupe, setEditNomGroupe] = useState("");
   const [isAssigned, setIsAssigned] = useState<boolean | null>(null);
@@ -213,9 +214,13 @@ export default function MesPromotionDetailPage() {
     setActionError(null);
 
     try {
-      await createGroupe(promotionId, nomGroupe.trim());
+      const groupe = await createGroupe(promotionId, nomGroupe.trim());
+      if (createGroupeTeacherId) {
+        await assignEnseignantToGroupe(groupe.id, createGroupeTeacherId);
+      }
       setDialogGroupeOpen(false);
       setNomGroupe("");
+      setCreateGroupeTeacherId("");
       await loadPromotion();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Impossible de créer le groupe.");
@@ -264,6 +269,30 @@ export default function MesPromotionDetailPage() {
       await loadPromotion();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Impossible d'ajouter l'enseignant.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReplaceTeacher = async (
+    groupeId: string,
+    currentTeacherIds: string[],
+    enseignantId: string
+  ) => {
+    if (!enseignantId) return;
+    setSaving(true);
+    setActionError(null);
+
+    try {
+      await Promise.all(
+        currentTeacherIds.map((currentTeacherId) =>
+          unassignEnseignantFromGroupe(groupeId, currentTeacherId)
+        )
+      );
+      await assignEnseignantToGroupe(groupeId, enseignantId);
+      await loadPromotion();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Impossible de remplacer l'enseignant.");
     } finally {
       setSaving(false);
     }
@@ -386,6 +415,19 @@ export default function MesPromotionDetailPage() {
                       <DialogDescription>Le groupe sera rattaché à cette promotion.</DialogDescription>
                     </DialogHeader>
                     <Input value={nomGroupe} onChange={(event) => setNomGroupe(event.target.value)} placeholder="Nom du groupe" />
+                    <label className="block text-sm font-medium text-slate-700">Enseignant</label>
+                    <select
+                      className="mb-4 mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:ring-2 focus:ring-slate-300"
+                      value={createGroupeTeacherId}
+                      onChange={(event) => setCreateGroupeTeacherId(event.target.value)}
+                    >
+                      <option value="">Aucun enseignant</option>
+                      {availableTeachers.map((teacher) => (
+                        <option key={teacher.id} value={teacher.id}>
+                          {teacher.prenom} {teacher.nom}
+                        </option>
+                      ))}
+                    </select>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setDialogGroupeOpen(false)} disabled={saving}>
                         Annuler
@@ -430,12 +472,24 @@ export default function MesPromotionDetailPage() {
                             <div className="flex flex-wrap gap-2">
                               <select
                                 className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm"
-                                disabled={saving || unassignedTeachers.length === 0}
-                                onChange={(event) => void handleAssign(groupe.id, event.target.value)}
+                                disabled={saving || availableTeachers.length === 0}
+                                onChange={(event) => {
+                                  const selected = event.target.value;
+                                  if (!selected) return;
+                                  if (enseignants.length > 0) {
+                                    void handleReplaceTeacher(
+                                      groupe.id,
+                                      enseignants.map((assignment) => assignment.enseignant_id),
+                                      selected
+                                    );
+                                  } else {
+                                    void handleAssign(groupe.id, selected);
+                                  }
+                                }}
                                 value=""
                               >
-                                <option value="">Ajouter un enseignant...</option>
-                                {unassignedTeachers.map((teacher) => (
+                                <option value="">{enseignants.length > 0 ? "Changer d'enseignant..." : "Ajouter un enseignant..."}</option>
+                                {availableTeachers.map((teacher) => (
                                   <option key={teacher.id} value={teacher.id}>
                                     {teacher.prenom} {teacher.nom}
                                   </option>

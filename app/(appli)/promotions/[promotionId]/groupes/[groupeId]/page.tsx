@@ -41,20 +41,26 @@ import { useAuth } from "@/hooks/useAuth";
 import { uploadNotesCsv, type ImportJobOut } from "@/lib/api/imports";
 import {
   assignEtudiantToGroupe,
+  assignEnseignantToGroupe,
   createExamen,
   createNote,
   deleteNote,
   getExamens,
   getGroupe,
+  getGroupeEnseignants,
   getGroupeEtudiants,
   getNotes,
   getPromotionEtudiants,
   unassignEtudiantFromGroupe,
+  unassignEnseignantFromGroupe,
   updateNote,
   type EtudiantOut,
+  type EnseignantGroupeOut,
   type GroupeOut,
 } from "@/lib/api/scolarite";
+import { getUsers } from "@/lib/api/admin";
 import type { ExamenOut, NoteOut } from "@/types/scolarite";
+import type { UtilisateurOut } from "@/types/admin";
 
 type Tab = "eleves" | "examens";
 
@@ -103,6 +109,9 @@ export default function GroupeManagementPage() {
   const [editingNote, setEditingNote] = useState<NoteOut | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [lastImportJob, setLastImportJob] = useState<ImportJobOut | null>(null);
+  const [teachers, setTeachers] = useState<UtilisateurOut[]>([]);
+  const [groupTeachers, setGroupTeachers] = useState<EnseignantGroupeOut[]>([]);
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
 
   const isAdminPedagogique = hasRole("admin") || hasRole("admin_pedagogique");
   const canManagePromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
@@ -113,14 +122,18 @@ export default function GroupeManagementPage() {
     try {
       setLoading(true);
       setError(null);
-      const [groupeData, groupeEtudiantsData, promotionEtudiantsData] = await Promise.all([
+      const [groupeData, groupeEtudiantsData, promotionEtudiantsData, teachersData, groupTeachersData] = await Promise.all([
         getGroupe(groupeId),
         getGroupeEtudiants(groupeId),
         getPromotionEtudiants(promotionId),
+        getUsers({ role: "enseignant", actif: true }),
+        getGroupeEnseignants(groupeId),
       ]);
       setGroupe(groupeData);
       setEtudiantsGroupe(groupeEtudiantsData);
       setEtudiantsPromotion(promotionEtudiantsData);
+      setTeachers(teachersData);
+      setGroupTeachers(groupTeachersData);
       setSelectedEtudiantId(
         promotionEtudiantsData.find(
           (etudiant) => !groupeEtudiantsData.some((item) => item.id === etudiant.id)
@@ -242,6 +255,50 @@ export default function GroupeManagementPage() {
     }
   };
 
+  const currentTeacherIds = useMemo(
+    () => groupTeachers.map((assignment) => assignment.enseignant_id),
+    [groupTeachers]
+  );
+
+  const handleAssignTeacher = async () => {
+    if (!selectedTeacherId) {
+      setActionError("Sélectionnez un enseignant.");
+      return;
+    }
+
+    setSaving(true);
+    setActionError(null);
+
+    try {
+      if (currentTeacherIds.length > 0) {
+        await Promise.all(
+          currentTeacherIds.map((teacherId) => unassignEnseignantFromGroupe(groupeId, teacherId))
+        );
+      }
+      await assignEnseignantToGroupe(groupeId, selectedTeacherId);
+      setSelectedTeacherId("");
+      await loadGroupe();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Impossible d'assigner l'enseignant.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUnassignTeacher = async (enseignantId: string) => {
+    setSaving(true);
+    setActionError(null);
+
+    try {
+      await unassignEnseignantFromGroupe(groupeId, enseignantId);
+      await loadGroupe();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Impossible de retirer l'enseignant.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCreateExamen = async () => {
     const coefficient = Number(examCoefficient);
     const noteMax = Number(examNoteMax);
@@ -355,7 +412,7 @@ export default function GroupeManagementPage() {
     setActionError(null);
 
     try {
-      setLastImportJob(await uploadNotesCsv({ enseignementId: groupeId, file: uploadFile }));
+      setLastImportJob(await uploadNotesCsv({ examenId: selectedExamen.id, file: uploadFile }));
       setUploadFile(null);
       await loadNotesForExamen(selectedExamen);
     } catch (err) {
@@ -416,6 +473,49 @@ export default function GroupeManagementPage() {
           </div>
         </Card>
       </div>
+
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-slate-700">Enseignant du groupe</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {groupTeachers.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {groupTeachers.map((assignment) => {
+                const teacher = teachers.find((teacher) => teacher.id === assignment.enseignant_id);
+                return (
+                  <div key={assignment.enseignant_id} className="flex items-center gap-2 rounded-full border bg-slate-50 px-3 py-1 text-sm text-slate-700">
+                    <span>{teacher ? `${teacher.prenom} ${teacher.nom}` : assignment.enseignant_id}</span>
+                    <Button size="xs" variant="ghost" className="text-red-600 hover:text-red-700" disabled={saving} onClick={() => void handleUnassignTeacher(assignment.enseignant_id)}>
+                      Retirer
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Aucun enseignant assigné.</p>
+          )}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <select
+              value={selectedTeacherId}
+              onChange={(event) => setSelectedTeacherId(event.target.value)}
+              className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+            >
+              <option value="">Sélectionner un enseignant</option>
+              {teachers.map((teacher) => (
+                <option key={teacher.id} value={teacher.id}>
+                  {teacher.prenom} {teacher.nom}
+                </option>
+              ))}
+            </select>
+            <Button onClick={handleAssignTeacher} disabled={!selectedTeacherId || saving || teachers.length === 0}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {groupTeachers.length > 0 ? "Remplacer" : "Assigner"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {error || actionError ? (
         <Card className="border-red-100 bg-red-50/50">

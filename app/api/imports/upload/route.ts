@@ -8,10 +8,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: "Not authenticated" }, { status: 401 });
   }
 
+  const examenId = request.nextUrl.searchParams.get("examen_id");
   const enseignementId = request.nextUrl.searchParams.get("enseignement_id");
 
-  if (!enseignementId) {
-    return NextResponse.json({ detail: "Missing enseignement_id" }, { status: 400 });
+  if (!examenId && !enseignementId) {
+    return NextResponse.json({ detail: "Missing examen_id or enseignement_id" }, { status: 400 });
   }
 
   const formData = await request.formData().catch(() => null);
@@ -20,8 +21,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: "Missing file" }, { status: 400 });
   }
 
+  const query = examenId
+    ? `examen_id=${encodeURIComponent(examenId)}`
+    : `enseignement_id=${encodeURIComponent(enseignementId!)}`;
+
   const response = await backendFormDataFetch(
-    `/api/v1/imports/upload?enseignement_id=${encodeURIComponent(enseignementId)}`,
+    `/api/v1/imports/upload?${query}`,
     formData,
     { cookies: { accessToken } }
   );
