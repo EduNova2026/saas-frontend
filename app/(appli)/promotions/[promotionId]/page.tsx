@@ -40,10 +40,10 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   createEtudiant,
   createPromotionGroupe,
-  getNotes,
   getPromotion,
   getPromotionEtudiants,
   getPromotionGroupes,
+  getPromotionMoyenne,
   removeEtudiantFromPromotion,
   updateEtudiant,
   updateGroupe,
@@ -51,52 +51,11 @@ import {
   type GroupeOut,
   type PromotionOut,
 } from "@/lib/api/scolarite";
-import type { NoteOut } from "@/types/scolarite";
 
 type Tab = "groupes" | "etudiants";
 
 function getParamValue(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
-}
-
-async function loadNotes(etudiantIds: string[]) {
-  const allNotes: NoteOut[] = [];
-
-  for (const id of etudiantIds) {
-    try {
-      const notes = await getNotes({ etudiant_id: id, limit: 1000 });
-      allNotes.push(...notes);
-    } catch {}
-  }
-
-  return allNotes;
-}
-
-function computeAverage(notes: NoteOut[], etudiantId: string): number | null {
-  const studentNotes = notes.filter((note) => note.etudiant_id === etudiantId && !note.absent && note.valeur !== null);
-  if (studentNotes.length === 0) return null;
-
-  const sum = studentNotes.reduce((acc, note) => {
-    const normalized = (note.valeur! / note.examen.note_max) * 20;
-    return acc + normalized;
-  }, 0);
-
-  return sum / studentNotes.length;
-}
-
-function computePromotionStats(notes: NoteOut[], etudiantIds: string[]) {
-  const averages = etudiantIds
-    .map((id) => computeAverage(notes, id))
-    .filter((average): average is number => average !== null);
-
-  if (averages.length === 0) {
-    return { moyenneGenerale: null, tauxReussite: null };
-  }
-
-  const moyenneGenerale = averages.reduce((sum, average) => sum + average, 0) / averages.length;
-  const tauxReussite = (averages.filter((average) => average >= 10).length / averages.length) * 100;
-
-  return { moyenneGenerale, tauxReussite };
 }
 
 function formatAverage(value: number | null) {
@@ -130,13 +89,18 @@ export default function PromotionDashboardPage() {
   const [nomEtudiant, setNomEtudiant] = useState("");
   const [prenomEtudiant, setPrenomEtudiant] = useState("");
   const [nomGroupe, setNomGroupe] = useState("");
+  const [semestreGroupe, setSemestreGroupe] = useState(1);
+  const [coeffGroupe, setCoeffGroupe] = useState(1);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [editingEtudiant, setEditingEtudiant] = useState<EtudiantOut | null>(null);
   const [editingGroupe, setEditingGroupe] = useState<GroupeOut | null>(null);
   const [editNom, setEditNom] = useState("");
   const [editPrenom, setEditPrenom] = useState("");
+  const [editSemestre, setEditSemestre] = useState(1);
+  const [editCoefficient, setEditCoefficient] = useState(1);
   const [moyenneGenerale, setMoyenneGenerale] = useState<number | null>(null);
+  const [selectedSemestre, setSelectedSemestre] = useState(1);
   const [tauxReussite, setTauxReussite] = useState<number | null>(null);
 
   const isAdminPedagogique = hasRole("admin_pedagogique");
@@ -153,25 +117,24 @@ export default function PromotionDashboardPage() {
         getPromotionEtudiants(promotionId),
         getPromotionGroupes(promotionId),
       ]);
-      const notesData = await loadNotes(etudiantsData.map((etudiant) => etudiant.id));
-      const stats = computePromotionStats(notesData, etudiantsData.map((etudiant) => etudiant.id));
+      const moyenne = await getPromotionMoyenne(promotionId, selectedSemestre);
       setPromotion(promotionData);
       setEtudiants(etudiantsData);
       setGroupes(groupesData);
-      setMoyenneGenerale(stats.moyenneGenerale);
-      setTauxReussite(stats.tauxReussite);
+      setMoyenneGenerale(moyenne.moyenne);
+      setTauxReussite(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger la promotion.");
     } finally {
       setLoading(false);
     }
-  }, [promotionId]);
+  }, [promotionId, selectedSemestre]);
 
   useEffect(() => {
     if (!authLoading && canManagePromotions) {
       queueMicrotask(() => void loadPromotion());
     }
-  }, [authLoading, canManagePromotions, loadPromotion]);
+  }, [authLoading, canManagePromotions, loadPromotion, selectedSemestre]);
 
   const filteredEtudiants = useMemo(() => {
     const value = search.trim().toLowerCase();
@@ -208,9 +171,11 @@ export default function PromotionDashboardPage() {
     setActionError(null);
 
     try {
-      await createPromotionGroupe(promotionId, nomGroupe.trim());
+      await createPromotionGroupe(promotionId, nomGroupe.trim(), semestreGroupe, coeffGroupe);
       setDialogGroupeOpen(false);
       setNomGroupe("");
+      setSemestreGroupe(1);
+      setCoeffGroupe(1);
       await loadPromotion();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Impossible de créer le groupe.");
@@ -232,6 +197,8 @@ export default function PromotionDashboardPage() {
     setEditingEtudiant(null);
     setEditNom(groupe.nom);
     setEditPrenom("");
+    setEditSemestre(groupe.semestre);
+    setEditCoefficient(groupe.coefficient);
     setActionError(null);
   };
 
@@ -240,6 +207,8 @@ export default function PromotionDashboardPage() {
     setEditingGroupe(null);
     setEditNom("");
     setEditPrenom("");
+    setEditSemestre(1);
+    setEditCoefficient(1);
   };
 
   const handleUpdate = async () => {
@@ -258,6 +227,8 @@ export default function PromotionDashboardPage() {
         await updateGroupe(editingGroupe.id, {
           nom: editNom.trim(),
           promotion_id: editingGroupe.promotion_id,
+          semestre: editSemestre,
+          coefficient: editCoefficient,
         });
       }
 
@@ -336,6 +307,19 @@ export default function PromotionDashboardPage() {
         </p>
       </div>
 
+      <div className="flex items-center gap-3">
+        <label htmlFor="semestre-select" className="text-sm font-medium text-slate-600">Semestre :</label>
+        <select
+          id="semestre-select"
+          value={selectedSemestre}
+          onChange={(e) => setSelectedSemestre(Number(e.target.value))}
+          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm"
+        >
+          <option value={1}>Semestre 1</option>
+          <option value={2}>Semestre 2</option>
+        </select>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard title="Étudiants" value={loading ? "…" : String(etudiants.length)} icon={<Users />} />
         <StatCard title="Groupes" value={loading ? "…" : String(groupes.length)} icon={<GraduationCap />} />
@@ -377,6 +361,29 @@ export default function PromotionDashboardPage() {
                       <DialogDescription>Le groupe sera rattaché à cette promotion.</DialogDescription>
                     </DialogHeader>
                     <Input value={nomGroupe} onChange={(event) => setNomGroupe(event.target.value)} placeholder="Nom du groupe" />
+                    <div className="space-y-2">
+                      <label htmlFor="semestre-create" className="text-sm font-medium text-slate-700">Semestre</label>
+                      <select
+                        id="semestre-create"
+                        value={semestreGroupe}
+                        onChange={(event) => setSemestreGroupe(Number(event.target.value))}
+                        className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                      >
+                        <option value={1}>Semestre 1</option>
+                        <option value={2}>Semestre 2</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="coefficient-create" className="text-sm font-medium text-slate-700">Coefficient</label>
+                      <Input
+                        id="coefficient-create"
+                        type="number"
+                        min="0.01"
+                        step="0.1"
+                        value={coeffGroupe}
+                        onChange={(event) => setCoeffGroupe(parseFloat(event.target.value) || 1)}
+                      />
+                    </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setDialogGroupeOpen(false)} disabled={saving}>
                         Annuler
@@ -393,17 +400,21 @@ export default function PromotionDashboardPage() {
                 <Table>
                   <TableHeader className="sticky top-0 z-10 border-b bg-slate-50">
                     <TableRow>
-                      <TableHead>Groupe</TableHead>
-                      <TableHead>Actions</TableHead>
+<TableHead>Groupe</TableHead>
+                       <TableHead>Semestre</TableHead>
+                       <TableHead>Coef.</TableHead>
+                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <LoadingRow colSpan={2} label="Chargement des groupes…" />
+                      <LoadingRow colSpan={4} label="Chargement des groupes…" />
                     ) : groupes.length > 0 ? (
                       groupes.map((groupe) => (
                         <TableRow key={groupe.id}>
                           <TableCell className="font-medium text-slate-900">{groupe.nom}</TableCell>
+                            <TableCell><span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">{groupe.semestre}</span></TableCell>
+                            <TableCell className="text-sm text-slate-600">{groupe.coefficient.toFixed(1)}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
                               <Button asChild size="sm" variant="outline" className="gap-2">
@@ -421,7 +432,7 @@ export default function PromotionDashboardPage() {
                         </TableRow>
                       ))
                     ) : (
-                      <EmptyRow colSpan={2} label="Aucun groupe dans cette promotion." />
+                      <EmptyRow colSpan={4} label="Aucun groupe dans cette promotion." />
                     )}
                   </TableBody>
                 </Table>
@@ -524,6 +535,33 @@ export default function PromotionDashboardPage() {
               <Input value={editPrenom} onChange={(event) => setEditPrenom(event.target.value)} placeholder="Prénom" />
             ) : null}
             <Input value={editNom} onChange={(event) => setEditNom(event.target.value)} placeholder="Nom" />
+            {editingGroupe ? (
+              <div className="space-y-2">
+                <label htmlFor="semestre-edit" className="text-sm font-medium text-slate-700">Semestre</label>
+                <select
+                  id="semestre-edit"
+                  value={editSemestre}
+                  onChange={(event) => setEditSemestre(Number(event.target.value))}
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                >
+                  <option value={1}>Semestre 1</option>
+                  <option value={2}>Semestre 2</option>
+                </select>
+              </div>
+            ) : null}
+            {editingGroupe ? (
+              <div className="space-y-2">
+                <label htmlFor="coefficient-edit" className="text-sm font-medium text-slate-700">Coefficient</label>
+                <Input
+                  id="coefficient-edit"
+                  type="number"
+                  min="0.01"
+                  step="0.1"
+                  value={editCoefficient}
+                  onChange={(event) => setEditCoefficient(parseFloat(event.target.value) || 1)}
+                />
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeEditDialog} disabled={saving}>

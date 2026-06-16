@@ -31,10 +31,10 @@ import {
   assignEnseignantToGroupe,
   createGroupe,
   getGroupeEnseignants,
-  getNotes,
   getPromotion,
   getPromotionEtudiants,
   getPromotionGroupes,
+  getPromotionMoyenne,
   getResponsablePromotions,
   removeEtudiantFromPromotion,
   unassignEnseignantFromGroupe,
@@ -45,47 +45,11 @@ import {
   type PromotionOut,
 } from "@/lib/api/scolarite";
 import type { UtilisateurOut } from "@/types/admin";
-import type { NoteOut } from "@/types/scolarite";
 
 type Tab = "groupes" | "etudiants";
 
 function getParamValue(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
-}
-
-async function loadNotes(etudiantIds: string[]) {
-  const allNotes: NoteOut[] = [];
-
-  for (const id of etudiantIds) {
-    try {
-      const notes = await getNotes({ etudiant_id: id, limit: 1000 });
-      allNotes.push(...notes);
-    } catch {}
-  }
-
-  return allNotes;
-}
-
-function computeAverage(notes: NoteOut[], etudiantId: string): number | null {
-  const studentNotes = notes.filter((note) => note.etudiant_id === etudiantId && !note.absent && note.valeur !== null);
-  if (studentNotes.length === 0) return null;
-
-  const sum = studentNotes.reduce((acc, note) => {
-    const normalized = (note.valeur! / note.examen.note_max) * 20;
-    return acc + normalized;
-  }, 0);
-
-  return sum / studentNotes.length;
-}
-
-function computePromotionAverage(notes: NoteOut[], etudiantIds: string[]) {
-  const averages = etudiantIds
-    .map((id) => computeAverage(notes, id))
-    .filter((average): average is number => average !== null);
-
-  if (averages.length === 0) return null;
-
-  return averages.reduce((sum, average) => sum + average, 0) / averages.length;
 }
 
 function formatAverage(value: number | null) {
@@ -116,11 +80,16 @@ export default function MesPromotionDetailPage() {
   const [saving, setSaving] = useState(false);
   const [dialogGroupeOpen, setDialogGroupeOpen] = useState(false);
   const [nomGroupe, setNomGroupe] = useState("");
+  const [semestreGroupe, setSemestreGroupe] = useState(1);
+  const [coeffGroupe, setCoeffGroupe] = useState(1);
   const [createGroupeTeacherId, setCreateGroupeTeacherId] = useState("");
   const [editingGroupe, setEditingGroupe] = useState<GroupeOut | null>(null);
   const [editNomGroupe, setEditNomGroupe] = useState("");
+  const [editSemestre, setEditSemestre] = useState(1);
+  const [editCoefficient, setEditCoefficient] = useState(1);
   const [isAssigned, setIsAssigned] = useState<boolean | null>(null);
   const [moyenneGenerale, setMoyenneGenerale] = useState<number | null>(null);
+  const [selectedSemestre, setSelectedSemestre] = useState(1);
 
   const isAdminPedagogique = hasRole("admin_pedagogique");
   const canAccess = hasRole("responsable_pedagogique") || isAdminPedagogique;
@@ -157,20 +126,20 @@ export default function MesPromotionDetailPage() {
       const groupTeacherEntries = await Promise.all(
         groupesData.map(async (groupe) => [groupe.id, await getGroupeEnseignants(groupe.id)] as const)
       );
-      const notesData = await loadNotes(etudiantsData.map((etudiant) => etudiant.id));
+      const moyenne = await getPromotionMoyenne(promotionId, selectedSemestre);
 
       setPromotion(promotionData);
       setGroupes(groupesData);
       setEtudiants(etudiantsData);
       setAvailableTeachers(teachersData);
       setEnseignantsByGroupe(Object.fromEntries(groupTeacherEntries));
-      setMoyenneGenerale(computePromotionAverage(notesData, etudiantsData.map((etudiant) => etudiant.id)));
+      setMoyenneGenerale(moyenne.moyenne);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger la promotion.");
     } finally {
       setLoading(false);
     }
-  }, [isAdminPedagogique, promotionId, userId]);
+  }, [isAdminPedagogique, promotionId, selectedSemestre, userId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -180,7 +149,7 @@ export default function MesPromotionDetailPage() {
     }
 
     queueMicrotask(() => void loadPromotion());
-  }, [authLoading, canAccess, loadPromotion, userId]);
+  }, [authLoading, canAccess, loadPromotion, selectedSemestre, userId]);
 
   const teachersById = useMemo(
     () => new Map(availableTeachers.map((teacher) => [teacher.id, teacher])),
@@ -214,12 +183,14 @@ export default function MesPromotionDetailPage() {
     setActionError(null);
 
     try {
-      const groupe = await createGroupe(promotionId, nomGroupe.trim());
+      const groupe = await createGroupe(promotionId, nomGroupe.trim(), semestreGroupe, coeffGroupe);
       if (createGroupeTeacherId) {
         await assignEnseignantToGroupe(groupe.id, createGroupeTeacherId);
       }
       setDialogGroupeOpen(false);
       setNomGroupe("");
+      setSemestreGroupe(1);
+      setCoeffGroupe(1);
       setCreateGroupeTeacherId("");
       await loadPromotion();
     } catch (err) {
@@ -232,12 +203,16 @@ export default function MesPromotionDetailPage() {
   const openGroupeEdit = (groupe: GroupeOut) => {
     setEditingGroupe(groupe);
     setEditNomGroupe(groupe.nom);
+    setEditSemestre(groupe.semestre);
+    setEditCoefficient(groupe.coefficient);
     setActionError(null);
   };
 
   const closeGroupeEdit = () => {
     setEditingGroupe(null);
     setEditNomGroupe("");
+    setEditSemestre(1);
+    setEditCoefficient(1);
   };
 
   const handleUpdateGroupe = async () => {
@@ -249,6 +224,8 @@ export default function MesPromotionDetailPage() {
       await updateGroupe(editingGroupe.id, {
         nom: editNomGroupe.trim(),
         promotion_id: editingGroupe.promotion_id,
+        semestre: editSemestre,
+        coefficient: editCoefficient,
       });
       closeGroupeEdit();
       await loadPromotion();
@@ -374,6 +351,19 @@ export default function MesPromotionDetailPage() {
         <p className="text-sm text-slate-500">{promotion ? promotion.annee_scolaire : "Groupes et étudiants assignés."}</p>
       </div>
 
+      <div className="flex items-center gap-3 mb-4">
+        <label htmlFor="semestre-select" className="text-sm font-medium text-slate-600">Semestre :</label>
+        <select
+          id="semestre-select"
+          value={selectedSemestre}
+          onChange={(e) => setSelectedSemestre(Number(e.target.value))}
+          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm"
+        >
+          <option value={1}>Semestre 1</option>
+          <option value={2}>Semestre 2</option>
+        </select>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard title="Groupes" value={loading ? "…" : String(groupes.length)} icon={<GraduationCap />} />
         <StatCard title="Étudiants" value={loading ? "…" : String(etudiants.length)} icon={<Users />} />
@@ -428,6 +418,24 @@ export default function MesPromotionDetailPage() {
                         </option>
                       ))}
                     </select>
+                    <label className="block text-sm font-medium text-slate-700">Semestre</label>
+                    <select
+                      className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:ring-2 focus:ring-slate-300"
+                      value={semestreGroupe}
+                      onChange={(event) => setSemestreGroupe(Number(event.target.value))}
+                    >
+                      <option value={1}>Semestre 1</option>
+                      <option value={2}>Semestre 2</option>
+                    </select>
+                    <label htmlFor="coefficient-create" className="block text-sm font-medium text-slate-700">Coefficient</label>
+                    <Input
+                      id="coefficient-create"
+                      type="number"
+                      min="0.01"
+                      step="0.1"
+                      value={coeffGroupe}
+                      onChange={(event) => setCoeffGroupe(parseFloat(event.target.value) || 1)}
+                    />
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setDialogGroupeOpen(false)} disabled={saving}>
                         Annuler
@@ -464,7 +472,11 @@ export default function MesPromotionDetailPage() {
                         <CardContent className="space-y-4 p-4">
                           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                             <div>
-                              <p className="font-medium text-slate-900">{groupe.nom}</p>
+                              <div className="flex items-center gap-2">
+<p className="font-medium text-slate-900">{groupe.nom}</p>
+                                 <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">S{groupe.semestre}</span>
+                                 <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Coef. {groupe.coefficient.toFixed(1)}</span>
+                              </div>
                               <p className="text-sm text-slate-500">
                                 Enseignants : {teacherNames.length > 0 ? teacherNames.join(", ") : "Aucun"}
                               </p>
@@ -600,6 +612,24 @@ export default function MesPromotionDetailPage() {
             <DialogDescription>Le nom du groupe sera mis à jour.</DialogDescription>
           </DialogHeader>
           <Input value={editNomGroupe} onChange={(event) => setEditNomGroupe(event.target.value)} placeholder="Nom du groupe" />
+          <label className="block text-sm font-medium text-slate-700">Semestre</label>
+          <select
+            className="mt-1 block w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:ring-2 focus:ring-slate-300"
+            value={editSemestre}
+            onChange={(event) => setEditSemestre(Number(event.target.value))}
+          >
+            <option value={1}>Semestre 1</option>
+            <option value={2}>Semestre 2</option>
+          </select>
+          <label htmlFor="coefficient-edit" className="block text-sm font-medium text-slate-700">Coefficient</label>
+          <Input
+            id="coefficient-edit"
+            type="number"
+            min="0.01"
+            step="0.1"
+            value={editCoefficient}
+            onChange={(event) => setEditCoefficient(parseFloat(event.target.value) || 1)}
+          />
           <DialogFooter>
             <Button variant="outline" onClick={closeGroupeEdit} disabled={saving}>
               Annuler
