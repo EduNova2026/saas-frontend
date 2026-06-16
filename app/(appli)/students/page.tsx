@@ -14,15 +14,18 @@ import { Mail, Search, User, ListTodo, GraduationCap, Loader2, ShieldAlert, Aler
 // Importations complétées depuis scolarite.ts
 import { 
   getEtudiants, 
+  getEtudiantMoyenne,
   getNotes, 
   getPromotions, 
   getGroupes, 
   getGroupeEtudiants, 
   type EtudiantOut, 
+  type MoyenneOut,
   type PromotionOut, 
   type GroupeOut 
 } from "@/lib/api/scolarite"
 import { useAuth } from "@/hooks/useAuth"
+import type { NoteOut } from "@/types/scolarite"
 
 interface EtudiantComplet {
   id: string
@@ -30,11 +33,15 @@ interface EtudiantComplet {
   prenom: string
   classe: string
   promotionIdBrut: string
-  moyenne: number
+  moyenne: number | null
   derniereNote: string
   scoreRisque: number
   statut: "OK" | "Risque" | "Suivre"
   aDesNotes: boolean
+}
+
+function formatAverage(value: number | null): string {
+  return value === null ? "—" : `${value.toFixed(1)}/20`
 }
 
 const formatEmailPart = (value: string) =>
@@ -47,10 +54,11 @@ const formatEmailPart = (value: string) =>
 
 export default function StudentsPage() {
   const [etudiantsRaw, setEtudiantsRaw] = useState<EtudiantOut[]>([])
-  const [notesRaw, setNotesRaw] = useState<any[]>([]) // any[] évite le blocage si NoteOut n'est pas exporté
+  const [notesRaw, setNotesRaw] = useState<NoteOut[]>([])
   const [promotionsRaw, setPromotionsRaw] = useState<PromotionOut[]>([])
   const [groupesRaw, setGroupesRaw] = useState<GroupeOut[]>([])
   const [idsEtudiantsDuGroupe, setIdsEtudiantsDuGroupe] = useState<string[]>([])
+  const [moyennesByEtudiant, setMoyennesByEtudiant] = useState<Record<string, MoyenneOut | null>>({})
   
   const [recherche, setRecherche] = useState("")
   const [etudiantSelectionneId, setEtudiantSelectionneId] = useState<string | null>(null)
@@ -62,6 +70,7 @@ export default function StudentsPage() {
   // Variables de filtrage globales
   const [promoSelectionnee, setPromoSelectionnee] = useState<string>("TOUTES")
   const [groupeSelectionne, setGroupeSelectionne] = useState<string>("TOUS")
+  const [selectedSemestre, setSelectedSemestre] = useState<number>(1)
 
   const { hasRole, loading: authLoading } = useAuth()
   const canAccessStudents = hasRole("responsable_pedagogique") || hasRole("admin_pedagogique")
@@ -156,31 +165,72 @@ export default function StudentsPage() {
 
   useEffect(() => {
     setGroupeSelectionne("TOUS")
+    setSelectedSemestre(1)
   }, [promoSelectionnee])
+
+  function handleGroupeSelectionChange(groupeId: string) {
+    setGroupeSelectionne(groupeId)
+    setSelectedSemestre(groupesRaw.find(groupe => groupe.id === groupeId)?.semestre ?? 1)
+  }
+
+  const etudiantsFiltres = useMemo(() => {
+    return etudiantsRaw.filter(etudiant => {
+      if (promoSelectionnee !== "TOUTES" && etudiant.promotion_id !== promoSelectionnee) return false
+      if (groupeSelectionne !== "TOUS" && !idsEtudiantsDuGroupe.includes(etudiant.id)) return false
+      return true
+    })
+  }, [etudiantsRaw, promoSelectionnee, groupeSelectionne, idsEtudiantsDuGroupe])
+
+  useEffect(() => {
+    if (etudiantsFiltres.length === 0) {
+      setMoyennesByEtudiant({})
+      return
+    }
+
+    let actif = true
+
+    async function chargerMoyennesEtudiants() {
+      const resultats = await Promise.allSettled(
+        etudiantsFiltres.map(async etudiant => ({
+          etudiantId: etudiant.id,
+          moyenne: await getEtudiantMoyenne(etudiant.id, selectedSemestre ?? 1),
+        }))
+      )
+
+      if (!actif) return
+
+      const moyennes: Record<string, MoyenneOut | null> = {}
+      resultats.forEach((resultat, index) => {
+        const etudiantId = etudiantsFiltres[index]?.id
+        if (!etudiantId) return
+        moyennes[etudiantId] = resultat.status === "fulfilled" ? resultat.value.moyenne : null
+      })
+
+      setMoyennesByEtudiant(moyennes)
+    }
+
+    void chargerMoyennesEtudiants()
+
+    return () => { actif = false }
+  }, [etudiantsFiltres, selectedSemestre])
 
   // 3. Calculs des fiches académiques filtrées et ordonnées
   const etudiantsFormates = useMemo<EtudiantComplet[]>(() => {
-    return etudiantsRaw
-      .filter(etudiant => {
-        if (promoSelectionnee !== "TOUTES" && etudiant.promotion_id !== promoSelectionnee) return false
-        if (groupeSelectionne !== "TOUS" && !idsEtudiantsDuGroupe.includes(etudiant.id)) return false
-        return true
-      })
+    return etudiantsFiltres
       .map((etudiant) => {
         const notesEtudiant = notesRaw.filter(note => note.etudiant_id === etudiant.id)
         const notesValides = notesEtudiant.filter(n => !n.absent && n.valeur !== undefined && n.valeur !== null)
         
         const totalNotes = notesValides.length
-        const somme = notesValides.reduce((sum, n) => sum + (n.valeur ?? 0), 0)
-        const moyenneCalculable = totalNotes > 0 ? somme / totalNotes : 0
+        const moyenneValue = moyennesByEtudiant[etudiant.id]?.moyenne ?? null
 
         const derniereNoteObj = notesValides[notesValides.length - 1]
         const derniereNoteStr = derniereNoteObj ? `${derniereNoteObj.valeur?.toFixed(1)}/20` : "—"
 
         let scoreRisque = 15
-        if (totalNotes === 0) scoreRisque = 0 
-        else if (moyenneCalculable < 10) scoreRisque = 85 
-        else if (moyenneCalculable < 12) scoreRisque = 45
+        if (moyenneValue === null) scoreRisque = 0 
+        else if (moyenneValue < 10) scoreRisque = 85 
+        else if (moyenneValue < 12) scoreRisque = 45
 
         let statut: "OK" | "Risque" | "Suivre" = "OK"
         if (scoreRisque >= 70) statut = "Risque"
@@ -194,14 +244,14 @@ export default function StudentsPage() {
           prenom: etudiant.prenom,
           classe: dictionnairePromotions[idPromo] || "Non définie",
           promotionIdBrut: idPromo,
-          moyenne: moyenneCalculable,
+          moyenne: moyenneValue,
           derniereNote: derniereNoteStr,
           scoreRisque: scoreRisque,
           statut: statut,
           aDesNotes: totalNotes > 0
         }
       })
-  }, [etudiantsRaw, notesRaw, promoSelectionnee, groupeSelectionne, idsEtudiantsDuGroupe, dictionnairePromotions])
+  }, [etudiantsFiltres, notesRaw, moyennesByEtudiant, dictionnairePromotions])
 
   // Synchronisation de l'élève sélectionné à droite
   const etudiantSelectionne = useMemo(() => {
@@ -260,12 +310,8 @@ export default function StudentsPage() {
       id: "moyenne",
       header: "MOYENNE",
       cell: ({ row }) => {
-        const { moyenne, aDesNotes } = row.original
-        return !aDesNotes ? (
-          <span className="font-bold text-slate-400">N/A</span>
-        ) : (
-          <span className="font-bold text-slate-800">{moyenne.toFixed(1)}/20</span>
-        )
+        const moyenneValue = row.original.moyenne
+        return <span className={`font-bold ${moyenneValue === null ? "text-slate-400" : "text-slate-800"}`}>{formatAverage(moyenneValue)}</span>
       },
     },
     {
@@ -368,13 +414,13 @@ export default function StudentsPage() {
             <Layers className="h-4 w-4 text-slate-400 shrink-0" />
             <select
               value={groupeSelectionne}
-              onChange={(e) => setGroupeSelectionne(e.target.value)}
+              onChange={(e) => handleGroupeSelectionChange(e.target.value)}
               className="bg-transparent text-sm font-medium text-slate-700 outline-none w-full cursor-pointer"
               disabled={loadingGroupe}
             >
               <option value="TOUS">{loadingGroupe ? "Mise à jour..." : "Tous les groupes"}</option>
               {listeGroupesFiltrés.map(g => (
-                <option key={g.id} value={g.id}>{g.nom}</option>
+                <option key={g.id} value={g.id}>{g.nom} (S{g.semestre})</option>
               ))}
             </select>
           </div>
@@ -486,7 +532,7 @@ export default function StudentsPage() {
                     <div className="p-2.5 bg-slate-50 rounded-lg border text-center">
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Moyenne</p>
                       <p className="text-base font-bold text-slate-800 mt-0.5">
-                        {etudiantSelectionne.aDesNotes ? `${etudiantSelectionne.moyenne.toFixed(1)}/20` : "N/A"}
+                        {formatAverage(etudiantSelectionne.moyenne)}
                       </p>
                     </div>
                     <div className="p-2.5 bg-slate-50 rounded-lg border text-center">

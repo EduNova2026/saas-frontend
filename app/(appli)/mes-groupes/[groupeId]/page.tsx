@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ClipboardList, FileUp, Loader2, Search, ShieldAlert } from "lucide-react";
+import { ArrowLeft, ClipboardList, FileUp, Loader2, Plus, Search, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,6 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -27,6 +28,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { uploadNotesCsv, type ImportJobOut } from "@/lib/api/imports";
 import {
+  createExamen,
   createNote,
   deleteNote,
   getEnseignantGroupes,
@@ -100,6 +102,13 @@ export default function MesGroupeDashboardPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [dialogExamenOpen, setDialogExamenOpen] = useState(false);
+  const [examNom, setExamNom] = useState("");
+  const [examType, setExamType] = useState("examen");
+  const [examCoefficient, setExamCoefficient] = useState("1");
+  const [examNoteMax, setExamNoteMax] = useState("20");
+  const [examDate, setExamDate] = useState("");
+  const [examCode, setExamCode] = useState("");
 
   const hasTeacherRole = hasRole("enseignant");
   const userId = user?.id;
@@ -149,6 +158,57 @@ export default function MesGroupeDashboardPage() {
       setLoading(false);
     }
   }, [groupeId, userId]);
+
+  const loadExamens = useCallback(async () => {
+    if (!groupeId) {
+      setExamens([]);
+      return;
+    }
+
+    try {
+      setActionError(null);
+      setExamens(await getExamens({ enseignement_id: groupeId }));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Impossible de charger les examens.");
+    }
+  }, [groupeId]);
+
+  const handleCreateExamen = async () => {
+    const coefficient = Number(examCoefficient);
+    const noteMax = Number(examNoteMax);
+
+    if (!groupeId || !examNom.trim() || coefficient <= 0 || noteMax <= 0) {
+      setActionError("Renseignez un nom, un coefficient et une note maximale valides.");
+      return;
+    }
+
+    setSaving(true);
+    setActionError(null);
+
+    try {
+      await createExamen({
+        enseignement_id: groupeId,
+        nom: examNom.trim(),
+        type: examType.trim() || "examen",
+        coefficient,
+        note_max: noteMax,
+        date_examen: examDate || null,
+        code_aurion: examCode.trim() || null,
+      });
+      setDialogExamenOpen(false);
+      setExamNom("");
+      setExamType("examen");
+      setExamCoefficient("1");
+      setExamNoteMax("20");
+      setExamDate("");
+      setExamCode("");
+      await loadExamens();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Impossible de créer l'examen.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (authLoading) return;
@@ -375,7 +435,10 @@ export default function MesGroupeDashboardPage() {
       </Button>
 
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{groupe ? groupe.nom : "Groupe"}</h1>
+        <h1 className="text-2xl font-bold text-slate-900">
+          {groupe ? groupe.nom : "Groupe"}{" "}
+          {groupe ? <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 align-middle">S{groupe.semestre}</span> : null}
+        </h1>
         <p className="text-sm text-slate-500">{promotionName}</p>
       </div>
 
@@ -451,6 +514,38 @@ export default function MesGroupeDashboardPage() {
             </section>
           ) : (
             <section className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Dialog open={dialogExamenOpen} onOpenChange={setDialogExamenOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2" disabled={!groupe}>
+                      <Plus className="h-4 w-4" />
+                      Créer un examen
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Créer un examen</DialogTitle>
+                      <DialogDescription>L&apos;examen sera rattaché à l&apos;enseignement de ce groupe.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Input value={examNom} onChange={(event) => setExamNom(event.target.value)} placeholder="Nom" />
+                      <Input value={examType} onChange={(event) => setExamType(event.target.value)} placeholder="Type" />
+                      <Input type="number" min="0" step="0.1" value={examCoefficient} onChange={(event) => setExamCoefficient(event.target.value)} placeholder="Coefficient" />
+                      <Input type="number" min="1" step="0.1" value={examNoteMax} onChange={(event) => setExamNoteMax(event.target.value)} placeholder="Note max" />
+                      <Input type="date" value={examDate} onChange={(event) => setExamDate(event.target.value)} />
+                      <Input value={examCode} onChange={(event) => setExamCode(event.target.value)} placeholder="Code Aurion optionnel" />
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setDialogExamenOpen(false)} disabled={saving}>Annuler</Button>
+                      <Button onClick={handleCreateExamen} disabled={!examNom.trim() || saving}>
+                        {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Créer
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              {actionError ? <p className="text-sm text-red-600">{actionError}</p> : null}
               <ScrollArea className="h-[500px] rounded-md border">
                 <Table>
                   <TableHeader className="sticky top-0 z-10 border-b bg-slate-50">
