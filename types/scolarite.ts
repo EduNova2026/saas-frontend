@@ -8,6 +8,23 @@ export interface GroupeOut {
   id: string;
   nom: string;
   promotion_id: string;
+  semestre: number;
+  coefficient: number;
+}
+
+export interface MoyenneOut {
+  moyenne: number | null;
+  semestre: number;
+  note_count: number;
+  coefficient_total: number;
+}
+
+export interface MoyenneParEtudiant {
+  etudiant_id: string;
+  moyenne: number | null;
+  semestre: number;
+  note_count: number;
+  coefficient_total: number;
 }
 
 export interface EtudiantOut {
@@ -61,7 +78,7 @@ export type PromotionUpdate = Pick<PromotionOut, "nom" | "annee_scolaire">;
 
 export type EtudiantUpdate = Pick<EtudiantOut, "nom" | "prenom">;
 
-export type GroupeUpdate = Pick<GroupeOut, "nom" | "promotion_id">;
+export type GroupeUpdate = Pick<GroupeOut, "nom" | "promotion_id"> & { semestre?: number; coefficient?: number };
 
 export interface ExamenCreate {
   enseignement_id: string;

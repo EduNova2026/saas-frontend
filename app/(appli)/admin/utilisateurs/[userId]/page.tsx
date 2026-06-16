@@ -444,7 +444,8 @@ export default function AdminUtilisateurProfilePage() {
                     groupAssignments.map((assignment) => (
                       <div key={assignment.groupe_id} className="rounded-lg border bg-white p-4">
                         <p className="font-semibold text-slate-900">
-                          {assignment.groupe?.nom ?? "Groupe indisponible"}
+                          {assignment.groupe?.nom ?? "Groupe indisponible"}{" "}
+                          {assignment.groupe ? <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">S{assignment.groupe.semestre}</span> : null}
                         </p>
                         <p className="text-sm text-slate-500">
                           Promotion : {assignment.promotion?.nom ?? "Promotion indisponible"}

@@ -6,6 +6,8 @@ import type {
   ExamenCreate,
   ExamenOut,
   GroupeUpdate,
+  MoyenneParEtudiant,
+  MoyenneOut,
   NoteBatchCreate,
   NoteCreate,
   NoteOut,
@@ -15,7 +17,12 @@ import type {
   EtudiantUpdate,
 } from "@/types/scolarite";
 
-export type { EnseignantGroupeOut, ResponsablePromotionOut } from "@/types/scolarite";
+export type {
+  EnseignantGroupeOut,
+  MoyenneOut,
+  MoyenneParEtudiant,
+  ResponsablePromotionOut,
+} from "@/types/scolarite";
 
 export interface PromotionOut {
   id: string;
@@ -27,6 +34,8 @@ export interface GroupeOut {
   id: string;
   nom: string;
   promotion_id: string;
+  semestre: number;
+  coefficient: number;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -83,12 +92,14 @@ function normalizeGroupe(value: unknown): GroupeOut | null {
   const id = record.id ?? record.groupe_id;
   const nom = record.nom ?? record.name ?? record.libelle;
   const promotionId = "promotion_id" in record ? record.promotion_id : record.promotionId;
+  const semestre = typeof record.semestre === "number" ? record.semestre : 1;
+  const coefficient = typeof record.coefficient === "number" ? record.coefficient : 1;
 
   if (typeof id !== "string" || typeof nom !== "string" || typeof promotionId !== "string") {
     return null;
   }
 
-  return { id, nom, promotion_id: promotionId };
+  return { id, nom, promotion_id: promotionId, semestre, coefficient };
 }
 
 function normalizeGroupesPayload(payload: unknown): GroupeOut[] {
@@ -431,12 +442,14 @@ export async function getPromotionGroupes(
 
 export async function createPromotionGroupe(
   promotionId: string,
-  nom: string
+  nom: string,
+  semestre: number = 1,
+  coefficient: number = 1
 ): Promise<GroupeOut> {
-  const response = await apiFetch(`/api/scolarite/promotions/${promotionId}/groupes`, {
+  const response = await apiFetch("/api/scolarite/groupes", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nom }),
+    body: JSON.stringify({ nom, promotion_id: promotionId, semestre, coefficient }),
   });
 
   if (!response.ok) {
@@ -461,9 +474,11 @@ export async function createPromotionGroupe(
 
 export async function createGroupe(
   promotionId: string,
-  nom: string
+  nom: string,
+  semestre: number = 1,
+  coefficient: number = 1
 ): Promise<GroupeOut> {
-  return createPromotionGroupe(promotionId, nom);
+  return createPromotionGroupe(promotionId, nom, semestre, coefficient);
 }
 
 export async function getGroupes(): Promise<GroupeOut[]> {
@@ -858,7 +873,7 @@ export async function assignGroupeToPromotion(
   const response = await apiFetch(`/api/scolarite/groupes/${groupe.id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nom: groupe.nom, promotion_id: promotionId }),
+    body: JSON.stringify({ nom: groupe.nom, promotion_id: promotionId, semestre: groupe.semestre }),
   });
 
   if (!response.ok) {
@@ -992,4 +1007,127 @@ export async function unassignEnseignantFromGroupe(
   if (!response.ok) {
     throw await readError(response, "Impossible de retirer l'enseignant du groupe.");
   }
+}
+
+function normalizeMoyenne(value: unknown): MoyenneOut | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const moyenne = typeof record.moyenne === "number" ? record.moyenne : null;
+  const semestre = typeof record.semestre === "number" ? record.semestre : 0;
+  const noteCount = typeof record.note_count === "number" ? record.note_count : 0;
+  const coefficientTotal =
+    typeof record.coefficient_total === "number" ? record.coefficient_total : 0;
+
+  return { moyenne, semestre, note_count: noteCount, coefficient_total: coefficientTotal };
+}
+
+function normalizeMoyenneParEtudiant(value: unknown): MoyenneParEtudiant | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  if (typeof record.etudiant_id !== "string") {
+    return null;
+  }
+
+  const moyenne = typeof record.moyenne === "number" ? record.moyenne : null;
+  const semestre = typeof record.semestre === "number" ? record.semestre : 0;
+  const noteCount = typeof record.note_count === "number" ? record.note_count : 0;
+  const coefficientTotal =
+    typeof record.coefficient_total === "number" ? record.coefficient_total : 0;
+
+  return {
+    etudiant_id: record.etudiant_id,
+    moyenne,
+    semestre,
+    note_count: noteCount,
+    coefficient_total: coefficientTotal,
+  };
+}
+
+export async function getEtudiantMoyenne(
+  etudiantId: string,
+  semestre: number = 1
+): Promise<MoyenneOut> {
+  const response = await apiFetch(
+    `/api/scolarite/etudiants/${etudiantId}/moyenne?semestre=${semestre}`
+  );
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger la moyenne de l'étudiant.");
+  }
+
+  const moyenne = normalizeMoyenne(await response.json());
+  if (!moyenne) throw new Error("La réponse moyenne est invalide.");
+  return moyenne;
+}
+
+export async function getPromotionMoyenne(
+  promotionId: string,
+  semestre: number = 1
+): Promise<MoyenneOut> {
+  const response = await apiFetch(
+    `/api/scolarite/promotions/${promotionId}/moyenne?semestre=${semestre}`
+  );
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger la moyenne de la promotion.");
+  }
+
+  const moyenne = normalizeMoyenne(await response.json());
+  if (!moyenne) throw new Error("La réponse moyenne est invalide.");
+  return moyenne;
+}
+
+export async function getPromotionEtudiantsMoyennes(
+  promotionId: string,
+  semestre: number = 1
+): Promise<MoyenneParEtudiant[]> {
+  const response = await apiFetch(
+    `/api/scolarite/promotions/${promotionId}/etudiants/moyennes?semestre=${semestre}`
+  );
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger les moyennes des étudiants.");
+  }
+
+  const data = await response.json();
+  return (Array.isArray(data) ? data : [])
+    .map(normalizeMoyenneParEtudiant)
+    .filter((moyenne): moyenne is MoyenneParEtudiant => moyenne !== null);
+}
+
+export async function getEnseignementMoyenne(
+  enseignementId: string,
+  semestre: number = 1
+): Promise<MoyenneOut> {
+  const response = await apiFetch(
+    `/api/scolarite/enseignements/${enseignementId}/moyenne?semestre=${semestre}`
+  );
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger la moyenne de l'enseignement.");
+  }
+
+  const moyenne = normalizeMoyenne(await response.json());
+  if (!moyenne) throw new Error("La réponse moyenne est invalide.");
+  return moyenne;
+}
+
+export async function getGroupeEtudiantsMoyennes(
+  groupeId: string,
+  semestre: number = 1
+): Promise<MoyenneParEtudiant[]> {
+  const response = await apiFetch(
+    `/api/scolarite/groupes/${groupeId}/etudiants/moyennes?semestre=${semestre}`
+  );
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger les moyennes des étudiants.");
+  }
+
+  const data = await response.json();
+  return (Array.isArray(data) ? data : [])
+    .map(normalizeMoyenneParEtudiant)
+    .filter((moyenne): moyenne is MoyenneParEtudiant => moyenne !== null);
 }

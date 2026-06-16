@@ -16,10 +16,12 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/hooks/useAuth";
 import {
+  getEnseignementMoyenne,
   getEnseignantGroupes,
   getGroupe,
   getPromotions,
   type GroupeOut,
+  type MoyenneOut,
 } from "@/lib/api/scolarite";
 import type { EnseignantGroupeOut } from "@/types/scolarite";
 
@@ -29,9 +31,14 @@ type GroupeRow = {
   promotionName: string;
 };
 
+function formatAverage(value: number | null): string {
+  return value === null ? "—" : `${value.toFixed(1)}/20`;
+}
+
 export default function MesGroupesPage() {
   const { hasRole, loading: authLoading, user } = useAuth();
   const [rows, setRows] = useState<GroupeRow[]>([]);
+  const [groupesMoyennes, setGroupesMoyennes] = useState<Record<string, MoyenneOut | null>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,6 +48,7 @@ export default function MesGroupesPage() {
   const loadGroupes = useCallback(async () => {
     if (!userId) {
       setRows([]);
+      setGroupesMoyennes({});
       setLoading(false);
       return;
     }
@@ -54,6 +62,9 @@ export default function MesGroupesPage() {
       ]);
       const promotionNames = new Map(promotions.map((promotion) => [promotion.id, promotion.nom]));
       const groupes = await Promise.all(assignments.map((assignment) => getGroupe(assignment.groupe_id)));
+      const moyenneResults = await Promise.allSettled(
+        groupes.map((groupe) => getEnseignementMoyenne(groupe.id, groupe.semestre ?? 1))
+      );
 
       setRows(
         assignments.map((assignment, index) => {
@@ -64,6 +75,13 @@ export default function MesGroupesPage() {
             promotionName: promotionNames.get(groupe.promotion_id) ?? "Promotion inconnue",
           };
         })
+      );
+      setGroupesMoyennes(
+        groupes.reduce<Record<string, MoyenneOut | null>>((acc, groupe, index) => {
+          const result = moyenneResults[index];
+          acc[groupe.id] = result.status === "fulfilled" ? result.value : null;
+          return acc;
+        }, {})
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger vos groupes.");
@@ -132,6 +150,8 @@ export default function MesGroupesPage() {
             <TableHeader className="sticky top-0 z-10 border-b bg-white">
               <TableRow>
                 <TableHead>Groupe</TableHead>
+                <TableHead>Semestre</TableHead>
+                <TableHead>Moyenne</TableHead>
                 <TableHead>Promotion</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -139,7 +159,7 @@ export default function MesGroupesPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="py-16 text-center">
+                  <TableCell colSpan={5} className="py-16 text-center">
                     <div className="flex items-center justify-center">
                       <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                     </div>
@@ -149,6 +169,10 @@ export default function MesGroupesPage() {
                 sortedRows.map(({ assignment, groupe, promotionName }) => (
                   <TableRow key={`${assignment.enseignant_id}-${assignment.groupe_id}`}>
                     <TableCell className="font-medium text-slate-900">{groupe.nom}</TableCell>
+                    <TableCell><span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">S{groupe.semestre}</span></TableCell>
+                    <TableCell className="text-sm text-slate-600">
+                      {formatAverage(groupesMoyennes[groupe.id]?.moyenne ?? null)}
+                    </TableCell>
                     <TableCell className="text-sm text-slate-600">{promotionName}</TableCell>
                     <TableCell className="text-right">
                       <Button asChild size="sm" variant="outline">
@@ -159,7 +183,7 @@ export default function MesGroupesPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={3} className="py-10 text-center text-sm text-slate-500">
+                  <TableCell colSpan={5} className="py-10 text-center text-sm text-slate-500">
                     Aucun groupe assigné.
                   </TableCell>
                 </TableRow>

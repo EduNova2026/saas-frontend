@@ -460,7 +460,10 @@ export default function GroupeManagementPage() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{groupe ? groupe.nom : "Groupe"}</h1>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {groupe ? groupe.nom : "Groupe"}{" "}
+            {groupe ? <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 align-middle">S{groupe.semestre}</span> : null}
+          </h1>
           <p className="text-sm text-slate-500">Élèves, examens et notes du groupe.</p>
         </div>
         <Card className="px-4 py-3">

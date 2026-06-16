@@ -38,10 +38,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     );
   }
 
+  const patchBody: Record<string, unknown> = {
+    nom: body.nom.trim(),
+    promotion_id: body.promotion_id,
+  };
+  if (typeof body.semestre === "number") {
+    patchBody.semestre = body.semestre;
+  }
+  if (typeof body.coefficient === "number") {
+    patchBody.coefficient = body.coefficient;
+  }
+
   const response = await backendFetch(`/api/v1/scolarite/groupes/${groupeId}`, {
     method: "PATCH",
     cookies: { accessToken },
-    body: { nom: body.nom.trim(), promotion_id: body.promotion_id },
+    body: patchBody,
   });
   const data = await response.json().catch(() => ({}));
 
