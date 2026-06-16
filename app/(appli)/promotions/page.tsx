@@ -32,15 +32,22 @@ import {
   Pencil,
 } from "lucide-react";
 import {
+  getPromotionMoyenne,
   getPromotions,
   createPromotion,
   updatePromotion,
+  type MoyenneOut,
   type PromotionOut,
 } from "@/lib/api/scolarite";
 import { useAuth } from "@/hooks/useAuth";
 
+function formatAverage(value: number | null): string {
+  return value === null ? "—" : `${value.toFixed(1)}/20`;
+}
+
 export default function PromotionsPage() {
   const [promotions, setPromotions] = useState<PromotionOut[]>([]);
+  const [promotionMoyennes, setPromotionMoyennes] = useState<Record<string, MoyenneOut | null>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { hasRole, loading: authLoading } = useAuth();
@@ -65,6 +72,16 @@ export default function PromotionsPage() {
       setError(null);
       const data = await getPromotions();
       setPromotions(data);
+      const moyenneResults = await Promise.allSettled(
+        data.map((promotion) => getPromotionMoyenne(promotion.id, 1))
+      );
+      setPromotionMoyennes(
+        data.reduce<Record<string, MoyenneOut | null>>((acc, promotion, index) => {
+          const result = moyenneResults[index];
+          acc[promotion.id] = result.status === "fulfilled" ? result.value : null;
+          return acc;
+        }, {})
+      );
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Impossible de charger les promotions."
@@ -300,6 +317,9 @@ export default function PromotionsPage() {
                   Année scolaire
                 </TableHead>
                 <TableHead className="py-3 font-semibold text-xs text-slate-500 uppercase tracking-wider">
+                  Moyenne S1
+                </TableHead>
+                <TableHead className="py-3 font-semibold text-xs text-slate-500 uppercase tracking-wider">
                   Actions
                 </TableHead>
               </TableRow>
@@ -308,7 +328,7 @@ export default function PromotionsPage() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={3}
+                    colSpan={4}
                     className="text-center py-10 text-sm text-slate-500"
                   >
                     <div className="flex items-center justify-center gap-2">
@@ -338,6 +358,9 @@ export default function PromotionsPage() {
                         {promo.annee_scolaire}
                       </span>
                     </TableCell>
+                    <TableCell className="py-4 text-sm font-medium text-slate-700">
+                      {formatAverage(promotionMoyennes[promo.id]?.moyenne ?? null)}
+                    </TableCell>
                     <TableCell className="py-4">
                       <div className="flex flex-wrap gap-2">
                         <Button asChild size="sm" variant="outline" className="gap-2">
@@ -362,7 +385,7 @@ export default function PromotionsPage() {
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={3}
+                    colSpan={4}
                     className="text-center py-10 text-sm text-slate-500"
                   >
                     Aucune promotion trouvée.
