@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { useAuth } from "@/hooks/useAuth"
 import { ShieldAlert, GraduationCap, Layers, Loader2} from "lucide-react"
@@ -18,8 +18,13 @@ import {
   getPromotions, 
   getGroupes, 
   getGroupeEtudiants, 
+  getPromotionEtudiantsMoyennes,
+  getGroupeEtudiantsMoyennes,
+  getPromotionMoyenne,
+  getEnseignementMoyenne,
   type EtudiantOut, 
-  type PromotionOut, 
+  type MoyenneParEtudiant,
+  type MoyenneOut,
   type GroupeOut 
 } from "@/lib/api/scolarite"
 
@@ -27,18 +32,18 @@ const chartConfig = {
   moyenneGenerale: { label: "Moyenne", color: "#2563eb" },
 } satisfies ChartConfig
 
-const donneesGraphique = [
-  { mois: "Janvier", moyenneGenerale: 0 },
-  { mois: "Février", moyenneGenerale: 0 },
-  { mois: "Mars", moyenneGenerale: 0 },
-  { mois: "Avril", moyenneGenerale: 0 },
-]
+function formatAverage(value: number | null): string {
+  return value === null ? "—" : `${value.toFixed(1)}/20`;
+}
 
 export default function DashboardPage() {
   const [etudiants, setEtudiants] = useState<EtudiantOut[]>([])
   const [promotionMap, setPromotionMap] = useState<Map<string, string>>(new Map())
   const [groupesRaw, setGroupesRaw] = useState<GroupeOut[]>([])
   const [idsEtudiantsDuGroupe, setIdsEtudiantsDuGroupe] = useState<string[]>([])
+  const [moyennesByEtudiant, setMoyennesByEtudiant] = useState<Record<string, MoyenneParEtudiant | null>>({})
+  const [moyenneScope, setMoyenneScope] = useState<MoyenneOut | null>(null)
+  const [semestreSelectionne, setSemestreSelectionne] = useState<number>(1)
   
   const [loading, setLoading] = useState(true)
   const [loadingGroupe, setLoadingGroupe] = useState(false)
@@ -69,17 +74,84 @@ export default function DashboardPage() {
           getPromotions(),
           getGroupes()
         ])
+        const etudiantsCharges = response.items ?? []
+        const moyennesParEtudiant = etudiantsCharges.reduce<Record<string, MoyenneParEtudiant | null>>(
+          (acc, etudiant) => {
+            acc[etudiant.id] = null
+            return acc
+          },
+          {}
+        )
+
+        if (groupeSelectionne !== "TOUS") {
+          const groupe = groupes.find((groupe) => groupe.id === groupeSelectionne)
+          const moyennesGroupe = await getGroupeEtudiantsMoyennes(
+            groupeSelectionne,
+            groupe?.semestre ?? 1
+          ).catch(() => [])
+
+          moyennesGroupe.forEach((moyenne) => {
+            moyennesParEtudiant[moyenne.etudiant_id] = moyenne
+          })
+        } else if (promoSelectionnee !== "TOUTES") {
+          const moyennesPromotion = await getPromotionEtudiantsMoyennes(
+            promoSelectionnee,
+            semestreSelectionne
+          ).catch(() => [])
+
+          moyennesPromotion.forEach((moyenne) => {
+            moyennesParEtudiant[moyenne.etudiant_id] = moyenne
+          })
+        } else {
+          const moyennesParPromotion = await Promise.all(
+            promotions.map((promotion) =>
+              getPromotionEtudiantsMoyennes(promotion.id, semestreSelectionne).catch(() => [])
+            )
+          )
+
+          moyennesParPromotion.flat().forEach((moyenne) => {
+            moyennesParEtudiant[moyenne.etudiant_id] = moyenne
+          })
+        }
+
+        let moyenneCible: MoyenneOut | null = null
+        if (groupeSelectionne !== "TOUS") {
+          const groupe = groupes.find((groupe) => groupe.id === groupeSelectionne)
+          moyenneCible = await getEnseignementMoyenne(groupeSelectionne, groupe?.semestre ?? 1).catch(() => null)
+        } else if (promoSelectionnee !== "TOUTES") {
+          moyenneCible = await getPromotionMoyenne(promoSelectionnee, 1).catch(() => null)
+        } else {
+          const moyennesValides = Object.values(moyennesParEtudiant)
+            .map((moyenne) => moyenne?.moyenne ?? null)
+            .filter((moyenne): moyenne is number => moyenne !== null)
+          moyenneCible = {
+            moyenne: moyennesValides.length > 0
+              ? moyennesValides.reduce((total, moyenne) => total + moyenne, 0) / moyennesValides.length
+              : null,
+            semestre: semestreSelectionne,
+            note_count: Object.values(moyennesParEtudiant).reduce(
+              (total, moyenne) => total + (moyenne?.note_count ?? 0),
+              0
+            ),
+            coefficient_total: Object.values(moyennesParEtudiant).reduce(
+              (total, moyenne) => total + (moyenne?.coefficient_total ?? 0),
+              0
+            ),
+          }
+        }
 
         if (actif) {
-          setEtudiants(response.items ?? [])
+          setEtudiants(etudiantsCharges)
           setPromotionMap(new Map(promotions.map((promotion) => [promotion.id, promotion.nom])))
           setGroupesRaw(groupes ?? [])
+          setMoyennesByEtudiant(moyennesParEtudiant)
+          setMoyenneScope(moyenneCible)
         }
       } catch {
         if (actif) {
           setError("Impossible de charger le registre global de la scolarité.")
         }
-      } military: {
+      } finally {
         if (actif) {
           setLoading(false)
         }
@@ -91,7 +163,7 @@ export default function DashboardPage() {
     return () => {
       actif = false
     }
-  }, [authLoading, canAccessDashboard])
+  }, [authLoading, canAccessDashboard, semestreSelectionne, promoSelectionnee, groupeSelectionne])
 
   // 2. Interrogation dynamique de la table pivot d'attribution dès qu'un groupe est ciblé
   useEffect(() => {
@@ -143,6 +215,21 @@ export default function DashboardPage() {
     })
   }, [etudiants, promoSelectionnee, groupeSelectionne, idsEtudiantsDuGroupe])
 
+  const etudiantsAnalysés = useMemo(() => {
+    return etudiantsFiltrés.filter((etudiant) => (moyennesByEtudiant[etudiant.id]?.note_count ?? 0) > 0).length
+  }, [etudiantsFiltrés, moyennesByEtudiant])
+
+  const etudiantsARisque = useMemo(() => {
+    return etudiantsFiltrés.filter((etudiant) => {
+      const moyenne = moyennesByEtudiant[etudiant.id]?.moyenne
+      return moyenne !== null && moyenne !== undefined && moyenne < 10
+    }).length
+  }, [etudiantsFiltrés, moyennesByEtudiant])
+
+  const donneesGraphique = useMemo(() => [
+    { scope: "Moyenne", moyenneGenerale: moyenneScope?.moyenne ?? 0 },
+  ], [moyenneScope])
+
   // Construction des colonnes du tableau
   const columns = useMemo<ColumnDef<EtudiantOut>[]>(() => [
     {
@@ -165,7 +252,10 @@ export default function DashboardPage() {
     {
       id: "moyenne",
       header: "MOYENNE",
-      cell: () => <span className="font-bold text-slate-500">N/A</span>,
+      cell: ({ row }) => {
+        const m = moyennesByEtudiant[row.original.id];
+        return <span className="font-bold text-slate-500">{formatAverage(m?.moyenne ?? null)}</span>;
+      },
     },
     {
       id: "derniereNote",
@@ -175,14 +265,22 @@ export default function DashboardPage() {
     {
       id: "scoreRisque",
       header: "SCORE RISQUE",
-      cell: () => <span className="text-slate-500 text-sm">—</span>,
+      cell: ({ row }) => {
+        const m = moyennesByEtudiant[row.original.id];
+        if (!m || m.moyenne === null) return <span className="text-slate-500 text-sm">—</span>;
+        return <span className={m.moyenne < 10 ? "text-red-500 font-bold text-sm" : "text-green-600 text-sm"}>{m.moyenne < 10 ? "À risque" : "OK"}</span>;
+      },
     },
     {
       id: "statut",
       header: "STATUT",
-      cell: () => <span className="text-slate-500 text-sm">—</span>,
+      cell: ({ row }) => {
+        const m = moyennesByEtudiant[row.original.id];
+        if (!m) return <span className="text-slate-500 text-sm">—</span>;
+        return <span className="text-sm text-slate-600">{m.note_count} notes</span>;
+      },
     },
-  ], [promotionMap])
+  ], [promotionMap, moyennesByEtudiant])
 
   // Raccordement de la table TanStack aux données filtrées à la volée
   const table = useReactTable<EtudiantOut>({
@@ -257,7 +355,7 @@ export default function DashboardPage() {
             >
               <option value="TOUS">{loadingGroupe ? "Mise à jour..." : "Tous les groupes"}</option>
               {listeGroupesFiltrés.map(g => (
-                <option key={g.id} value={g.id}>{g.nom}</option>
+                <option key={g.id} value={g.id}>{g.nom} (S{g.semestre})</option>
               ))}
             </select>
           </div>
@@ -282,14 +380,14 @@ export default function DashboardPage() {
         <Card className="shadow-xs border bg-white rounded-xl">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-wider">Étudiants analysés</CardTitle></CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-slate-900 tracking-tight">{loading || loadingGroupe ? "…" : etudiantsFiltrés.length}</p>
+            <p className="text-3xl font-bold text-slate-900 tracking-tight">{loading || loadingGroupe ? "…" : etudiantsAnalysés}</p>
           </CardContent>
         </Card>
 
         <Card className="shadow-xs border bg-white rounded-xl">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-wider">Étudiants à risque</CardTitle></CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-red-500 tracking-tight">—</p>
+            <p className="text-3xl font-bold text-red-500 tracking-tight">{loading || loadingGroupe ? "…" : etudiantsARisque}</p>
           </CardContent>
         </Card>
       </div>
@@ -343,31 +441,31 @@ export default function DashboardPage() {
         </Card>
 
         <Card className="shadow-xs border bg-white rounded-xl h-[365px] flex flex-col overflow-hidden">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold text-slate-600 tracking-tight">Évolution de la Moyenne</CardTitle>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between gap-3">
+            <CardTitle className="text-sm font-bold text-slate-600 tracking-tight">Moyenne actuelle — Semestre {semestreSelectionne}</CardTitle>
+            <select
+              value={semestreSelectionne}
+              onChange={(e) => setSemestreSelectionne(Number(e.target.value))}
+              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 outline-none cursor-pointer shadow-2xs"
+            >
+              <option value={1}>Semestre 1</option>
+              <option value={2}>Semestre 2</option>
+            </select>
           </CardHeader>
           <CardContent className="flex-1 min-h-0 pt-0 relative">
-            <ChartContainer config={chartConfig} className="h-full w-full opacity-30">
-              <LineChart data={donneesGraphique} margin={{ left: -10, right: 10, bottom: 5, top: 10 }}>
+            <ChartContainer config={chartConfig} className="h-full w-full">
+              <BarChart data={donneesGraphique} margin={{ left: -10, right: 10, bottom: 5, top: 10 }}>
                 <CartesianGrid vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="mois" tickLine={false} axisLine={false} tickMargin={10} className="text-xs text-slate-500" />
+                <XAxis dataKey="scope" tickLine={false} axisLine={false} tickMargin={10} className="text-xs text-slate-500" />
                 <YAxis domain={[0, 20]} tickLine={false} axisLine={false} tickMargin={10} className="text-xs text-slate-500" />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Line
-                  type="monotone"
+                <Bar
                   dataKey="moyenneGenerale"
-                  stroke="var(--color-moyenneGenerale)"
-                  strokeWidth={3}
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
+                  fill="var(--color-moyenneGenerale)"
+                  radius={[8, 8, 0, 0]}
                 />
-              </LineChart>
+              </BarChart>
             </ChartContainer>
-            <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
-              <p className="rounded-lg bg-white/95 px-4 py-3 text-xs font-semibold text-slate-500 shadow-sm border border-slate-200">
-                Données d&apos;évaluation globales indisponibles
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>
