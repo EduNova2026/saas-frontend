@@ -100,7 +100,7 @@ export default function PromotionDashboardPage() {
   const [editSemestre, setEditSemestre] = useState(1);
   const [editCoefficient, setEditCoefficient] = useState(1);
   const [moyenneGenerale, setMoyenneGenerale] = useState<number | null>(null);
-  const [selectedSemestre, setSelectedSemestre] = useState(1);
+  const [selectedSemestre, setSelectedSemestre] = useState<"all" | 1 | 2>("all");
   const [tauxReussite, setTauxReussite] = useState<number | null>(null);
 
   const isAdminPedagogique = hasRole("admin_pedagogique");
@@ -117,11 +117,27 @@ export default function PromotionDashboardPage() {
         getPromotionEtudiants(promotionId),
         getPromotionGroupes(promotionId),
       ]);
-      const moyenne = await getPromotionMoyenne(promotionId, selectedSemestre);
+
+      let moyenneValue: number | null = null;
+      if (selectedSemestre === "all") {
+        const [m1, m2] = await Promise.all([
+          getPromotionMoyenne(promotionId, 1),
+          getPromotionMoyenne(promotionId, 2),
+        ]);
+        if (m1.moyenne !== null && m2.moyenne !== null) {
+          moyenneValue = (m1.moyenne + m2.moyenne) / 2;
+        } else {
+          moyenneValue = m1.moyenne ?? m2.moyenne;
+        }
+      } else {
+        const m = await getPromotionMoyenne(promotionId, selectedSemestre);
+        moyenneValue = m.moyenne;
+      }
+
       setPromotion(promotionData);
       setEtudiants(etudiantsData);
       setGroupes(groupesData);
-      setMoyenneGenerale(moyenne.moyenne);
+      setMoyenneGenerale(moyenneValue);
       setTauxReussite(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible de charger la promotion.");
@@ -144,6 +160,11 @@ export default function PromotionDashboardPage() {
       formatStudentName(etudiant.prenom, etudiant.nom).toLowerCase().includes(value)
     );
   }, [etudiants, search]);
+
+  const filteredGroupes = useMemo(() => {
+    if (selectedSemestre === "all") return groupes;
+    return groupes.filter((g) => g.semestre === selectedSemestre);
+  }, [groupes, selectedSemestre]);
 
   const changeTab = (tab: Tab) => {
     router.replace(`/promotions/${promotionId}?tab=${tab}`);
@@ -312,9 +333,13 @@ export default function PromotionDashboardPage() {
         <select
           id="semestre-select"
           value={selectedSemestre}
-          onChange={(e) => setSelectedSemestre(Number(e.target.value))}
+          onChange={(e) => {
+            const val = e.target.value;
+            setSelectedSemestre(val === "all" ? "all" : Number(val) as 1 | 2);
+          }}
           className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm"
         >
+          <option value="all">Semestre 1 et 2</option>
           <option value={1}>Semestre 1</option>
           <option value={2}>Semestre 2</option>
         </select>
@@ -322,7 +347,7 @@ export default function PromotionDashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard title="Étudiants" value={loading ? "…" : String(etudiants.length)} icon={<Users />} />
-        <StatCard title="Groupes" value={loading ? "…" : String(groupes.length)} icon={<GraduationCap />} />
+        <StatCard title="Groupes" value={loading ? "…" : String(filteredGroupes.length)} icon={<GraduationCap />} />
         <StatCard title="Moyenne de la promotion" value={loading ? "…" : formatAverage(moyenneGenerale)} icon={<TrendingUp />} />
         <StatCard title="Taux de réussite" value={loading ? "…" : formatPercent(tauxReussite)} icon={<TrendingUp />} />
       </div>
@@ -409,8 +434,8 @@ export default function PromotionDashboardPage() {
                   <TableBody>
                     {loading ? (
                       <LoadingRow colSpan={4} label="Chargement des groupes…" />
-                    ) : groupes.length > 0 ? (
-                      groupes.map((groupe) => (
+                    ) : filteredGroupes.length > 0 ? (
+                      filteredGroupes.map((groupe) => (
                         <TableRow key={groupe.id}>
                           <TableCell className="font-medium text-slate-900">{groupe.nom}</TableCell>
                             <TableCell><span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">{groupe.semestre}</span></TableCell>
