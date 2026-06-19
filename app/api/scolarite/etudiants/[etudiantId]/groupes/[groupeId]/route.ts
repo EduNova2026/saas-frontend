@@ -1,4 +1,4 @@
-import { backendFetch } from "@/lib/server/backend";
+import { backendFetch, backendJsonResponse } from "@/lib/server/backend";
 import { NextRequest, NextResponse } from "next/server";
 
 type RouteContext = {
@@ -17,9 +17,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     `/api/v1/scolarite/etudiants/${etudiantId}/groupes/${groupeId}`,
     { method: "POST", cookies: { accessToken } }
   );
-  const data = await response.json().catch(() => ({}));
 
-  return NextResponse.json(data, { status: response.status });
+  return backendJsonResponse(response);
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
@@ -34,7 +33,6 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     `/api/v1/scolarite/etudiants/${etudiantId}/groupes/${groupeId}`,
     { method: "DELETE", cookies: { accessToken } }
   );
-  const data = await response.json().catch(() => ({}));
 
-  return NextResponse.json(data, { status: response.status });
+  return backendJsonResponse(response);
 }
