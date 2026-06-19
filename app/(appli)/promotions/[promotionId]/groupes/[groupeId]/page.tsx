@@ -269,12 +269,7 @@ export default function GroupeManagementPage() {
     setSaving(true);
     setActionError(null);
 
-    try {
-      if (currentTeacherIds.length > 0) {
-        await Promise.all(
-          currentTeacherIds.map((teacherId) => unassignEnseignantFromGroupe(groupeId, teacherId))
-        );
-      }
+  try {
       await assignEnseignantToGroupe(groupeId, selectedTeacherId);
       setSelectedTeacherId("");
       await loadGroupe();
@@ -514,7 +509,7 @@ export default function GroupeManagementPage() {
             </select>
             <Button onClick={handleAssignTeacher} disabled={!selectedTeacherId || saving || teachers.length === 0}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {groupTeachers.length > 0 ? "Remplacer" : "Assigner"}
+              Ajouter
             </Button>
           </div>
         </CardContent>
