@@ -54,7 +54,7 @@ export default function DashboardPage() {
   const [groupeSelectionne, setGroupeSelectionne] = useState<string>("TOUS")
 
   const { hasRole, loading: authLoading } = useAuth()
-  const canAccessDashboard = hasRole("responsable_pedagogique") || hasRole("admin_pedagogique")
+  const canAccessDashboard = hasRole("responsable_pedagogique")
 
   // 1. Chargement initial unifié de l'ensemble de la scolarité (Étudiants + Promotions + Groupes)
   useEffect(() => {
