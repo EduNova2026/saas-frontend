@@ -885,7 +885,7 @@ export default function GroupeManagementPage() {
       </Dialog>
 
       <Dialog open={selectedExamen !== null} onOpenChange={(open) => !open && setSelectedExamen(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="!w-[88vw] !max-w-6xl max-h-[82vh] overflow-y-auto p-5">
           <DialogHeader>
             <DialogTitle>Notes de {selectedExamen?.nom}</DialogTitle>
             <DialogDescription>Recherchez un élève, saisissez une note, ou importez un CSV.</DialogDescription>
@@ -992,13 +992,13 @@ export default function GroupeManagementPage() {
             </Card>
           </div>
 
-          <ScrollArea className="h-72 rounded-md border">
+          <ScrollArea className="h-80 rounded-md border">
             <Table>
               <TableHeader className="sticky top-0 z-10 border-b bg-slate-50">
                 <TableRow>
                   <TableHead>Élève</TableHead>
                   <TableHead>Note</TableHead>
-                  <TableHead>Motif</TableHead>
+                  <TableHead className="min-w-[360px]">Motif</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1010,7 +1010,9 @@ export default function GroupeManagementPage() {
                       <TableRow key={note.id}>
                         <TableCell className="font-medium text-slate-900">{etudiant ? formatStudentName(etudiant.prenom, etudiant.nom) : "Étudiant inconnu"}</TableCell>
                         <TableCell>{note.absent ? "Absent" : `${note.valeur}/${note.examen.note_max}`}</TableCell>
-                        <TableCell>{note.motif_absence ?? "-"}</TableCell>
+                        <TableCell className="max-w-xl whitespace-normal break-words text-sm text-slate-600">
+                          {note.motif_absence ?? "-"}
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
                             <Button size="sm" variant="outline" onClick={() => openEditNote(note)}>Modifier</Button>
