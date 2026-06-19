@@ -3,8 +3,10 @@
 import { apiFetch } from "@/lib/api/http";
 import type {
   EnseignantGroupeOut,
+  EtudiantExport,
   ExamenCreate,
   ExamenOut,
+  ExamenUpdate,
   GroupeUpdate,
   MoyenneParEtudiant,
   MoyenneOut,
@@ -768,6 +770,22 @@ export async function createExamen(payload: ExamenCreate): Promise<ExamenOut> {
   return examen;
 }
 
+export async function updateExamen(examenId: string, payload: ExamenUpdate): Promise<ExamenOut> {
+  const response = await apiFetch(`/api/scolarite/examens/${examenId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de modifier l'examen.");
+  }
+
+  const examen = normalizeExamen(await response.json());
+  if (!examen) throw new Error("L'examen a été modifié, mais la réponse est invalide.");
+  return examen;
+}
+
 export async function getNotes(params?: {
   examen_id?: string;
   etudiant_id?: string;
@@ -1112,6 +1130,21 @@ export async function getEnseignementMoyenne(
   const moyenne = normalizeMoyenne(await response.json());
   if (!moyenne) throw new Error("La réponse moyenne est invalide.");
   return moyenne;
+}
+
+export async function getEtudiantExport(
+  etudiantId: string
+): Promise<EtudiantExport> {
+  const response = await apiFetch(
+    `/api/scolarite/etudiants/${etudiantId}/export`
+  );
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger le relevé de l'étudiant.");
+  }
+
+  const data = (await response.json()) as EtudiantExport;
+  return data;
 }
 
 export async function getGroupeEtudiantsMoyennes(
