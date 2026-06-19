@@ -271,7 +271,7 @@ export default function StudentsPage() {
       .filter(note => note.etudiant_id === etudiantSelectionneId)
       .map(note => {
         const idDuGroupe = note.examen?.enseignement_id || ""
-        const nomDuGroupeLisible = dictionnaireGroupes[idDuGroupe] || idDuGroupe || "Général"
+        const nomDuGroupeLisible = dictionnaireGroupes[idDuGroupe] || "Général"
 
         return {
           id: note.id,
