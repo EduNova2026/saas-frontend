@@ -5,6 +5,8 @@ import { BadgeCheck, Loader2, Mail, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { allNavItems } from "@/config/navigation";
+import { useMemo } from "react";
 
 function formatRole(role: string): string {
   return role
@@ -45,9 +47,13 @@ export default function ProfilePage() {
     );
   }
 
-  const canSeeDashboard = hasRole("responsable_pedagogique");
-  const canSeePromotions =
-    hasRole("responsable_pedagogique") || hasRole("admin_pedagogique");
+  const accessiblePages = useMemo(
+    () =>
+      allNavItems.filter(
+        (item) => item.title !== "Mon profil" && (!item.roles || item.roles.some((r) => hasRole(r)))
+      ),
+    [hasRole]
+  );
 
   return (
     <main className="min-h-screen space-y-6 bg-slate-50 p-10">
@@ -132,26 +138,17 @@ export default function ProfilePage() {
           <CardTitle>Accès disponibles</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          {canSeeDashboard ? (
-            <Button asChild variant="outline">
-              <Link href="/dashboard">Dashboard</Link>
-            </Button>
-          ) : null}
-          {canSeeDashboard ? (
-            <Button asChild variant="outline">
-              <Link href="/students">Étudiants</Link>
-            </Button>
-          ) : null}
-          {canSeePromotions ? (
-            <Button asChild variant="outline">
-              <Link href="/promotions">Promotions</Link>
-            </Button>
-          ) : null}
-          {!canSeeDashboard && !canSeePromotions ? (
+          {accessiblePages.length > 0 ? (
+            accessiblePages.map((item) => (
+              <Button key={item.url} asChild variant="outline">
+                <Link href={item.url}>{item.title}</Link>
+              </Button>
+            ))
+          ) : (
             <p className="text-sm text-slate-500">
               Aucun module métier n&apos;est disponible pour votre rôle actuellement.
             </p>
-          ) : null}
+          )}
         </CardContent>
       </Card>
     </main>
