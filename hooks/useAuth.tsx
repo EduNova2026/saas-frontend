@@ -7,12 +7,14 @@ interface AuthContextValue {
   user: UserOut | null;
   loading: boolean;
   hasRole: (role: string) => boolean;
+  refreshUser: () => Promise<UserOut | null>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   loading: true,
   hasRole: () => false,
+  refreshUser: async () => null,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -31,8 +33,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const refreshUser = useCallback(async () => {
+    if (loading) return null;
+    setLoading(true);
+    try {
+      const currentUser = await me();
+      setUser(currentUser);
+      return currentUser;
+    } catch {
+      setUser(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [loading]);
+
   return (
-    <AuthContext.Provider value={{ user, loading, hasRole }}>
+    <AuthContext.Provider value={{ user, loading, hasRole, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
