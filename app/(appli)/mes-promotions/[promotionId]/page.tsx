@@ -90,6 +90,7 @@ export default function MesPromotionDetailPage() {
   const [isAssigned, setIsAssigned] = useState<boolean | null>(null);
   const [moyenneGenerale, setMoyenneGenerale] = useState<number | null>(null);
   const [selectedSemestre, setSelectedSemestre] = useState(1);
+  const [selectedSemester, setSelectedSemester] = useState<1 | 2 | "all">("all");
 
   const isAdminPedagogique = hasRole("admin_pedagogique");
   const canAccess = hasRole("responsable_pedagogique") || isAdminPedagogique;
@@ -173,6 +174,11 @@ export default function MesPromotionDetailPage() {
     );
   }, [etudiants, search]);
 
+  const filteredGroupes = useMemo(
+    () => (selectedSemester === "all" ? groupes : groupes.filter((groupe) => groupe.semestre === selectedSemester)),
+    [groupes, selectedSemester]
+  );
+
   const changeTab = (tab: Tab) => {
     router.replace(`/mes-promotions/${promotionId}?tab=${tab}`);
   };
@@ -246,30 +252,6 @@ export default function MesPromotionDetailPage() {
       await loadPromotion();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Impossible d'ajouter l'enseignant.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleReplaceTeacher = async (
-    groupeId: string,
-    currentTeacherIds: string[],
-    enseignantId: string
-  ) => {
-    if (!enseignantId) return;
-    setSaving(true);
-    setActionError(null);
-
-    try {
-      await Promise.all(
-        currentTeacherIds.map((currentTeacherId) =>
-          unassignEnseignantFromGroupe(groupeId, currentTeacherId)
-        )
-      );
-      await assignEnseignantToGroupe(groupeId, enseignantId);
-      await loadPromotion();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Impossible de remplacer l'enseignant.");
     } finally {
       setSaving(false);
     }
@@ -361,7 +343,7 @@ export default function MesPromotionDetailPage() {
         >
           <option value={1}>Semestre 1</option>
           <option value={2}>Semestre 2</option>
-        </select>
+          </select>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -379,13 +361,40 @@ export default function MesPromotionDetailPage() {
 
       <Card className="shadow-sm">
         <CardHeader className="border-b pb-0">
-          <div className="flex gap-2">
-            <Button variant={activeTab === "groupes" ? "default" : "ghost"} onClick={() => changeTab("groupes")}>
-              Groupes
-            </Button>
-            <Button variant={activeTab === "etudiants" ? "default" : "ghost"} onClick={() => changeTab("etudiants")}>
-              Étudiants
-            </Button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex gap-2">
+              <Button variant={activeTab === "groupes" ? "default" : "ghost"} onClick={() => changeTab("groupes")}>
+                Groupes
+              </Button>
+              <Button variant={activeTab === "etudiants" ? "default" : "ghost"} onClick={() => changeTab("etudiants")}>
+                Étudiants
+              </Button>
+            </div>
+            {activeTab === "groupes" ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={selectedSemester === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedSemester("all")}
+                >
+                  Tout
+                </Button>
+                <Button
+                  variant={selectedSemester === 1 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedSemester(1)}
+                >
+                  Semestre 1
+                </Button>
+                <Button
+                  variant={selectedSemester === 2 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedSemester(2)}
+                >
+                  Semestre 2
+                </Button>
+              </div>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="p-6">
@@ -457,8 +466,8 @@ export default function MesPromotionDetailPage() {
                       Chargement des groupes…
                     </CardContent>
                   </Card>
-                ) : groupes.length > 0 ? (
-                  groupes.map((groupe) => {
+                ) : filteredGroupes.length > 0 ? (
+                  filteredGroupes.map((groupe) => {
                     const enseignants = enseignantsByGroupe[groupe.id] ?? [];
                     const assignedIds = new Set(enseignants.map((enseignant) => enseignant.enseignant_id));
                     const unassignedTeachers = availableTeachers.filter((teacher) => !assignedIds.has(teacher.id));
@@ -484,24 +493,16 @@ export default function MesPromotionDetailPage() {
                             <div className="flex flex-wrap gap-2">
                               <select
                                 className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm"
-                                disabled={saving || availableTeachers.length === 0}
+                                disabled={saving || unassignedTeachers.length === 0}
                                 onChange={(event) => {
                                   const selected = event.target.value;
                                   if (!selected) return;
-                                  if (enseignants.length > 0) {
-                                    void handleReplaceTeacher(
-                                      groupe.id,
-                                      enseignants.map((assignment) => assignment.enseignant_id),
-                                      selected
-                                    );
-                                  } else {
-                                    void handleAssign(groupe.id, selected);
-                                  }
+                                  void handleAssign(groupe.id, selected);
                                 }}
                                 value=""
                               >
-                                <option value="">{enseignants.length > 0 ? "Changer d'enseignant..." : "Ajouter un enseignant..."}</option>
-                                {availableTeachers.map((teacher) => (
+                                <option value="">Ajouter un enseignant...</option>
+                                {unassignedTeachers.map((teacher) => (
                                   <option key={teacher.id} value={teacher.id}>
                                     {teacher.prenom} {teacher.nom}
                                   </option>
@@ -512,7 +513,7 @@ export default function MesPromotionDetailPage() {
                                 Modifier
                               </Button>
                               <Button asChild size="sm" variant="outline" className="gap-2">
-                                <Link href={`/mes-groupes/${groupe.id}?tab=eleves`}>
+                                <Link href={`/promotions/${promotionId}/groupes/${groupe.id}?tab=eleves`}>
                                   <Eye className="h-4 w-4" />
                                   Voir
                                 </Link>

@@ -114,7 +114,7 @@ export default function GroupeManagementPage() {
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
 
   const isAdminPedagogique = hasRole("admin_pedagogique");
-  const canManagePromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
+  const canManagePromotions = isAdminPedagogique;
 
   const loadGroupe = useCallback(async () => {
     if (!promotionId || !groupeId) return;
@@ -269,12 +269,7 @@ export default function GroupeManagementPage() {
     setSaving(true);
     setActionError(null);
 
-    try {
-      if (currentTeacherIds.length > 0) {
-        await Promise.all(
-          currentTeacherIds.map((teacherId) => unassignEnseignantFromGroupe(groupeId, teacherId))
-        );
-      }
+  try {
       await assignEnseignantToGroupe(groupeId, selectedTeacherId);
       setSelectedTeacherId("");
       await loadGroupe();
@@ -514,7 +509,7 @@ export default function GroupeManagementPage() {
             </select>
             <Button onClick={handleAssignTeacher} disabled={!selectedTeacherId || saving || teachers.length === 0}>
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {groupTeachers.length > 0 ? "Remplacer" : "Assigner"}
+              Ajouter
             </Button>
           </div>
         </CardContent>
@@ -622,7 +617,6 @@ export default function GroupeManagementPage() {
             <section className="space-y-4">
               <Card className="border-blue-100 bg-blue-50/50">
                 <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-sm text-slate-600">Les examens sont automatiquement rattachés à ce groupe.</p>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="outline" onClick={() => void loadExamens()} disabled={!groupeId || loadingExamens}>
                       {loadingExamens ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -636,10 +630,6 @@ export default function GroupeManagementPage() {
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Créer un examen</DialogTitle>
-                          <DialogDescription>L&apos;examen sera rattaché à l&apos;enseignement de ce groupe.</DialogDescription>
-                        </DialogHeader>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <Input value={examNom} onChange={(event) => setExamNom(event.target.value)} placeholder="Nom" />
                           <Input value={examType} onChange={(event) => setExamType(event.target.value)} placeholder="Type" />

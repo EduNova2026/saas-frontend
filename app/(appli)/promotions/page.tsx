@@ -64,7 +64,7 @@ export default function PromotionsPage() {
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const isAdminPedagogique = hasRole("admin_pedagogique");
-  const canAccessPromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
+  const canAccessPromotions = isAdminPedagogique;
 
   const chargerPromotions = useCallback(async () => {
     try {

@@ -19,19 +19,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const user = await meResponse.json();
-  const roles: string[] = user.roles ?? [];
-
-  const isAdmin = roles.includes("admin_pedagogique");
-  const isRP = roles.includes("responsable_pedagogique");
-
-  if (!isAdmin && !isRP) {
-    return NextResponse.json(
-      { detail: "Insufficient permissions" },
-      { status: 403 }
-    );
-  }
-
   const { search } = request.nextUrl;
   const response = await backendFetch(`/api/v1/scolarite/promotions/${search}`, {
     cookies: { accessToken },

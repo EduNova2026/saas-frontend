@@ -76,7 +76,7 @@ function StatusBadge({ actif }: { actif: boolean }) {
 export default function AdminUtilisateurProfilePage() {
   const params = useParams<{ userId: string }>();
   const userId = params.userId;
-  const { user: currentUser, hasRole, loading: authLoading } = useAuth();
+  const { user: currentUser, hasRole, loading: authLoading, refreshUser } = useAuth();
   const canAccessUsers = hasRole("admin_pedagogique");
   const [utilisateur, setUtilisateur] = useState<UtilisateurOut | null>(null);
   const [roles, setRoles] = useState<RoleOut[]>([]);
@@ -248,6 +248,9 @@ export default function AdminUtilisateurProfilePage() {
 
     try {
       await replaceUserRolesAndClearAssignments(userId, Array.from(selectedRoles));
+      if (userId === currentUser?.id) {
+        await refreshUser();
+      }
       setShowRoleConfirm(false);
       await loadData();
     } catch (err) {

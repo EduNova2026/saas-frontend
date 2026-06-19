@@ -1,6 +1,7 @@
 import "server-only";
 
 import { env } from "@/lib/env";
+import { NextResponse } from "next/server";
 
 type BackendFetchOptions = {
   method?: string;
@@ -66,4 +67,17 @@ export async function backendFormDataFetch(
   } catch {
     return Response.json({ detail: "Backend unreachable" }, { status: 502 });
   }
+}
+
+/**
+ * Convert a backend Response into a NextResponse safely.
+ * Handles 204/205 (no body) correctly — returns null body instead of
+ * crashing with "Invalid response status code 204".
+ */
+export async function backendJsonResponse(response: Response): Promise<NextResponse> {
+  if (response.status === 204 || response.status === 205) {
+    return new NextResponse(null, { status: response.status });
+  }
+  const data = await response.json().catch(() => ({}));
+  return NextResponse.json(data, { status: response.status });
 }

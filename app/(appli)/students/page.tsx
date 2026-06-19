@@ -271,7 +271,7 @@ export default function StudentsPage() {
       .filter(note => note.etudiant_id === etudiantSelectionneId)
       .map(note => {
         const idDuGroupe = note.examen?.enseignement_id || ""
-        const nomDuGroupeLisible = dictionnaireGroupes[idDuGroupe] || idDuGroupe || "Général"
+        const nomDuGroupeLisible = dictionnaireGroupes[idDuGroupe] || "Général"
 
         return {
           id: note.id,
@@ -573,11 +573,6 @@ export default function StudentsPage() {
                     )}
                   </ScrollArea>
                 </div>
-              </div>
-
-              <div className="p-2.5 rounded-lg border flex gap-2 bg-slate-50/80 border-slate-100 text-slate-500 text-[11px] leading-tight mt-3">
-                <GraduationCap className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
-                <span>Données d&apos;évaluation compilées en direct depuis PostgreSQL.</span>
               </div>
             </div>
           ) : (
