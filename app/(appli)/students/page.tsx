@@ -574,11 +574,6 @@ export default function StudentsPage() {
                   </ScrollArea>
                 </div>
               </div>
-
-              <div className="p-2.5 rounded-lg border flex gap-2 bg-slate-50/80 border-slate-100 text-slate-500 text-[11px] leading-tight mt-3">
-                <GraduationCap className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
-                <span>Données d&apos;évaluation compilées en direct depuis PostgreSQL.</span>
-              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center p-6 text-slate-400 gap-2">
