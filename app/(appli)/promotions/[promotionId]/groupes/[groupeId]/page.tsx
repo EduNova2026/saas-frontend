@@ -15,9 +15,10 @@ import {
   ShieldAlert,
   Trash2,
   Users,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,7 @@ import {
   createExamen,
   createNote,
   deleteNote,
+  getEtudiantExport,
   getExamens,
   getGroupe,
   getGroupeEnseignants,
@@ -53,13 +55,15 @@ import {
   getPromotionEtudiants,
   unassignEtudiantFromGroupe,
   unassignEnseignantFromGroupe,
+  updateExamen,
   updateNote,
   type EtudiantOut,
   type EnseignantGroupeOut,
   type GroupeOut,
 } from "@/lib/api/scolarite";
 import { getUsers } from "@/lib/api/admin";
-import type { ExamenOut, NoteOut } from "@/types/scolarite";
+import type { EtudiantExport, ExamenOut, NoteOut } from "@/types/scolarite";
+import StudentDetailPanel from "@/components/StudentDetailPanel";
 import type { UtilisateurOut } from "@/types/admin";
 
 type Tab = "eleves" | "examens";
@@ -90,6 +94,7 @@ export default function GroupeManagementPage() {
   const [selectedEtudiantId, setSelectedEtudiantId] = useState("");
   const [dialogAddStudentOpen, setDialogAddStudentOpen] = useState(false);
   const [dialogExamenOpen, setDialogExamenOpen] = useState(false);
+  const [editingExamen, setEditingExamen] = useState<ExamenOut | null>(null);
   const [selectedExamen, setSelectedExamen] = useState<ExamenOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingExamens, setLoadingExamens] = useState(false);
@@ -112,9 +117,16 @@ export default function GroupeManagementPage() {
   const [teachers, setTeachers] = useState<UtilisateurOut[]>([]);
   const [groupTeachers, setGroupTeachers] = useState<EnseignantGroupeOut[]>([]);
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [selectedExport, setSelectedExport] = useState<EtudiantExport | null>(null);
+  const [searchStudentQuery, setSearchStudentQuery] = useState("");
+  const [searchStudentLoading, setSearchStudentLoading] = useState(false);
+  const [studentSearchResults, setStudentSearchResults] = useState<EtudiantOut[]>([]);
+  const [assigningStudentId, setAssigningStudentId] = useState<string | null>(null);
 
   const isAdminPedagogique = hasRole("admin_pedagogique");
-  const canManagePromotions = isAdminPedagogique;
+  const canManagePromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
 
   const loadGroupe = useCallback(async () => {
     if (!promotionId || !groupeId) return;
@@ -255,10 +267,130 @@ export default function GroupeManagementPage() {
     }
   };
 
-  const currentTeacherIds = useMemo(
-    () => groupTeachers.map((assignment) => assignment.enseignant_id),
-    [groupTeachers]
-  );
+  const handleVoirClick = async (etudiant: EtudiantOut) => {
+    setExportLoading(true);
+    setExportDialogOpen(true);
+    setSelectedExport(null);
+    try {
+      const exportData = await getEtudiantExport(etudiant.id);
+      setSelectedExport(exportData);
+    } catch (err) {
+      setSelectedExport({
+        etudiant_id: etudiant.id,
+        nom: etudiant.nom,
+        prenom: etudiant.prenom,
+        promotion_id: etudiant.promotion_id,
+        promotion_nom: groupe?.nom ?? null,
+        groupes: [],
+      });
+      setActionError(err instanceof Error ? err.message : "Impossible de charger le relevé détaillé.");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportPrint = () => {
+    if (!selectedExport) return;
+    const { nom, prenom, promotion_nom, groupes } = selectedExport;
+
+    const formatName = (p: string, n: string) =>
+      `${p.charAt(0).toUpperCase() + p.slice(1)} ${n.toUpperCase()}`;
+
+    const computeAverage = (groupeNotes: typeof groupes[number]["notes"]) => {
+      let sum = 0;
+      let total = 0;
+      for (const n of groupeNotes) {
+        if (n.note_absent || n.note_valeur === null) continue;
+        sum += (n.note_valeur / n.examen_note_max) * 20 * n.examen_coefficient;
+        total += n.examen_coefficient;
+      }
+      return total > 0 ? (sum / total).toFixed(1) : "—";
+    };
+
+    const rows = groupes
+      .map((groupe) => {
+        const notesHtml = groupe.notes
+          .map((n) => {
+            const displayValue = n.note_absent
+              ? "Absent"
+              : n.note_valeur !== null
+                ? `${n.note_valeur}/${n.examen_note_max}`
+                : "—";
+            return `<tr><td>${n.examen_nom}</td><td>${n.examen_type}</td><td>${n.examen_coefficient}</td><td>${displayValue}</td></tr>`;
+          })
+          .join("");
+        return `<tr class="groupe-header"><td colspan="4"><strong>${groupe.groupe_nom} (S${groupe.semestre}, coef. ${groupe.coefficient}) — Moyenne: ${computeAverage(groupe.notes)}/20</strong></td></tr>${notesHtml}`;
+      })
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Relevé - ${formatName(prenom, nom)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #1e293b; }
+    h1 { font-size: 20px; margin-bottom: 4px; }
+    h2 { font-size: 14px; color: #64748b; margin-top: 0; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+    th { background: #f8fafc; font-weight: 600; color: #64748b; text-transform: uppercase; font-size: 11px; }
+    .groupe-header td { background: #f1f5f9; font-size: 13px; padding: 10px 12px; }
+  </style>
+</head>
+<body>
+  <h1>${formatName(prenom, nom)}</h1>
+  <h2>${promotion_nom || "Promotion inconnue"}</h2>
+  <table>
+    <thead><tr><th>Examen</th><th>Type</th><th>Coef.</th><th>Note</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <script>window.onload = function() { window.print(); }</script>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, "_blank");
+    if (printWindow) {
+      printWindow.onload = () => {
+        URL.revokeObjectURL(url);
+      };
+    }
+  };
+
+  const handleSearchStudent = async (query: string) => {
+    setSearchStudentQuery(query);
+    if (!query.trim() || !promotionId) {
+      setStudentSearchResults([]);
+      return;
+    }
+    setSearchStudentLoading(true);
+    try {
+      const results = await getPromotionEtudiants(promotionId, query.trim());
+      const alreadyInGroup = new Set(etudiantsGroupe.map((e) => e.id));
+      setStudentSearchResults(results.filter((r) => !alreadyInGroup.has(r.id)).slice(0, 5));
+    } catch {
+      setStudentSearchResults([]);
+    } finally {
+      setSearchStudentLoading(false);
+    }
+  };
+
+  const handleAddStudentToGroup = async (etudiantId: string) => {
+    if (!groupeId) return;
+    setAssigningStudentId(etudiantId);
+    try {
+      await assignEtudiantToGroupe(etudiantId, groupeId);
+      setStudentSearchResults((prev) => prev.filter((r) => r.id !== etudiantId));
+      setSearchStudentQuery("");
+      await loadGroupe();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Erreur lors de l'ajout.");
+    } finally {
+      setAssigningStudentId(null);
+    }
+  };
 
   const handleAssignTeacher = async () => {
     if (!selectedTeacherId) {
@@ -294,7 +426,28 @@ export default function GroupeManagementPage() {
     }
   };
 
-  const handleCreateExamen = async () => {
+  const resetExamenForm = () => {
+    setEditingExamen(null);
+    setExamNom("");
+    setExamType("examen");
+    setExamCoefficient("1");
+    setExamNoteMax("20");
+    setExamDate("");
+    setExamCode("");
+  };
+
+  const openEditExamen = (examen: ExamenOut) => {
+    setEditingExamen(examen);
+    setExamNom(examen.nom);
+    setExamType(examen.type);
+    setExamCoefficient(String(examen.coefficient));
+    setExamNoteMax(String(examen.note_max));
+    setExamDate(examen.date_examen ?? "");
+    setExamCode(examen.code_aurion ?? "");
+    setDialogExamenOpen(true);
+  };
+
+  const handleSaveExamen = async () => {
     const coefficient = Number(examCoefficient);
     const noteMax = Number(examNoteMax);
 
@@ -307,25 +460,28 @@ export default function GroupeManagementPage() {
     setActionError(null);
 
     try {
-      await createExamen({
-        enseignement_id: groupeId,
+      const payload = {
         nom: examNom.trim(),
         type: examType.trim() || "examen",
         coefficient,
         note_max: noteMax,
         date_examen: examDate || null,
         code_aurion: examCode.trim() || null,
-      });
+      };
+
+      if (editingExamen) {
+        await updateExamen(editingExamen.id, payload);
+      } else {
+        await createExamen({
+          enseignement_id: groupeId,
+          ...payload,
+        });
+      }
       setDialogExamenOpen(false);
-      setExamNom("");
-      setExamType("examen");
-      setExamCoefficient("1");
-      setExamNoteMax("20");
-      setExamDate("");
-      setExamCode("");
+      resetExamenForm();
       await loadExamens();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Impossible de créer l'examen.");
+      setActionError(err instanceof Error ? err.message : "Impossible d'enregistrer l'examen.");
     } finally {
       setSaving(false);
     }
@@ -407,7 +563,7 @@ export default function GroupeManagementPage() {
     setActionError(null);
 
     try {
-      setLastImportJob(await uploadNotesCsv({ examenId: selectedExamen.id, file: uploadFile }));
+      setLastImportJob(await uploadNotesCsv({ examenId: selectedExamen.id, file: uploadFile, groupeId: groupeId! }));
       setUploadFile(null);
       await loadNotesForExamen(selectedExamen);
     } catch (err) {
@@ -594,9 +750,9 @@ export default function GroupeManagementPage() {
                           <TableCell className="font-medium text-slate-900">{formatStudentName(etudiant.prenom, etudiant.nom)}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
-                              <Button size="sm" variant="outline" className="gap-2" disabled>
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => void handleVoirClick(etudiant)}>
                                 <Eye className="h-4 w-4" />
-                                Voir à venir
+                                Voir
                               </Button>
                               <Button size="sm" variant="outline" className="gap-2 text-red-600 hover:text-red-700" onClick={() => void handleUnassignEtudiant(etudiant)} disabled={saving}>
                                 <Trash2 className="h-4 w-4" />
@@ -622,14 +778,26 @@ export default function GroupeManagementPage() {
                       {loadingExamens ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                       Charger
                     </Button>
-                    <Dialog open={dialogExamenOpen} onOpenChange={setDialogExamenOpen}>
+                    <Dialog
+                      open={dialogExamenOpen}
+                      onOpenChange={(open) => {
+                        setDialogExamenOpen(open);
+                        if (!open) resetExamenForm();
+                      }}
+                    >
                       <DialogTrigger asChild>
-                        <Button className="gap-2" disabled={!groupeId}>
+                        <Button className="gap-2" disabled={!groupeId} onClick={resetExamenForm}>
                           <Plus className="h-4 w-4" />
                           Créer un examen
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{editingExamen ? "Modifier l'examen" : "Créer un examen"}</DialogTitle>
+                          <DialogDescription>
+                            Renseignez les informations de l&apos;examen du groupe.
+                          </DialogDescription>
+                        </DialogHeader>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <Input value={examNom} onChange={(event) => setExamNom(event.target.value)} placeholder="Nom" />
                           <Input value={examType} onChange={(event) => setExamType(event.target.value)} placeholder="Type" />
@@ -640,9 +808,9 @@ export default function GroupeManagementPage() {
                         </div>
                         <DialogFooter>
                           <Button variant="outline" onClick={() => setDialogExamenOpen(false)} disabled={saving}>Annuler</Button>
-                          <Button onClick={handleCreateExamen} disabled={!examNom.trim() || saving}>
+                          <Button onClick={handleSaveExamen} disabled={!examNom.trim() || saving}>
                             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Créer
+                            {editingExamen ? "Modifier" : "Créer"}
                           </Button>
                         </DialogFooter>
                       </DialogContent>
@@ -679,9 +847,9 @@ export default function GroupeManagementPage() {
                                 <ClipboardList className="h-4 w-4" />
                                 Notes
                               </Button>
-                              <Button size="sm" variant="outline" className="gap-2" disabled>
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => openEditExamen(examen)}>
                                 <Pencil className="h-4 w-4" />
-                                Modifier à venir
+                                Modifier
                               </Button>
                             </div>
                           </TableCell>
@@ -698,14 +866,32 @@ export default function GroupeManagementPage() {
         </CardContent>
       </Card>
 
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="max-w-md h-[600px] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>
+              Dossier étudiant
+            </DialogTitle>
+            <DialogDescription>
+              Relevé de notes détaillé par groupe.
+            </DialogDescription>
+          </DialogHeader>
+          <StudentDetailPanel
+            data={selectedExport}
+            loading={exportLoading}
+            onExport={handleExportPrint}
+          />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={selectedExamen !== null} onOpenChange={(open) => !open && setSelectedExamen(null)}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Notes de {selectedExamen?.nom}</DialogTitle>
-            <DialogDescription>Ajoutez les notes manuellement ou importez un CSV via le service d&apos;import.</DialogDescription>
+            <DialogDescription>Recherchez un élève, saisissez une note, ou importez un CSV.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Saisie manuelle</CardTitle>
@@ -735,6 +921,59 @@ export default function GroupeManagementPage() {
                   </Button>
                   {editingNote ? <Button variant="outline" onClick={() => void loadNotesForExamen(selectedExamen as ExamenOut)}>Annuler</Button> : null}
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Ajouter un élève</CardTitle>
+                <CardDescription>Recherchez un élève de la promotion pour l&apos;ajouter au groupe.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Nom ou prénom..."
+                    value={searchStudentQuery}
+                    onChange={(e) => handleSearchStudent(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+                {searchStudentLoading ? (
+                  <div className="flex items-center justify-center py-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                  </div>
+                ) : studentSearchResults.length > 0 ? (
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {studentSearchResults.map((etudiant) => (
+                      <div
+                        key={etudiant.id}
+                        className="flex items-center justify-between p-2 bg-white rounded-md border text-xs"
+                      >
+                        <span className="font-medium text-slate-800 truncate">
+                          {formatStudentName(etudiant.prenom, etudiant.nom)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => handleAddStudentToGroup(etudiant.id)}
+                          disabled={assigningStudentId === etudiant.id}
+                        >
+                          {assigningStudentId === etudiant.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <UserPlus className="h-3 w-3" />
+                          )}
+                          Ajouter
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : searchStudentQuery.trim() ? (
+                  <p className="text-xs text-slate-400 py-2 text-center">
+                    Aucun élève trouvé.
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
 

@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
 
   const examenId = request.nextUrl.searchParams.get("examen_id");
   const enseignementId = request.nextUrl.searchParams.get("enseignement_id");
+  const groupeId = request.nextUrl.searchParams.get("groupe_id");
 
   if (!examenId && !enseignementId) {
     return NextResponse.json({ detail: "Missing examen_id or enseignement_id" }, { status: 400 });
@@ -21,9 +22,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ detail: "Missing file" }, { status: 400 });
   }
 
-  const query = examenId
-    ? `examen_id=${encodeURIComponent(examenId)}`
-    : `enseignement_id=${encodeURIComponent(enseignementId!)}`;
+  const queryParts: string[] = [];
+  if (examenId) queryParts.push(`examen_id=${encodeURIComponent(examenId)}`);
+  if (enseignementId) queryParts.push(`enseignement_id=${encodeURIComponent(enseignementId)}`);
+  if (groupeId) queryParts.push(`groupe_id=${encodeURIComponent(groupeId)}`);
+  const query = queryParts.join("&");
 
   const response = await backendFormDataFetch(
     `/api/v1/imports/upload?${query}`,

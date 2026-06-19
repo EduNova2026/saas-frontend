@@ -90,6 +90,8 @@ export interface ExamenCreate {
   code_aurion?: string | null;
 }
 
+export type ExamenUpdate = Partial<Omit<ExamenCreate, "enseignement_id">>;
+
 export interface NoteCreate {
   examen_id: string;
   etudiant_id: string;
@@ -107,4 +109,33 @@ export interface NoteUpdate {
 export interface NoteBatchCreate {
   examen_id: string;
   notes: NoteCreate[];
+}
+
+export interface EtudiantExportNote {
+  examen_id: string;
+  examen_nom: string;
+  examen_type: string;
+  examen_coefficient: number;
+  examen_note_max: number;
+  examen_date: string | null;
+  note_valeur: number | null;
+  note_absent: boolean;
+  note_motif_absence: string | null;
+}
+
+export interface EtudiantExportGroupe {
+  groupe_id: string;
+  groupe_nom: string;
+  semestre: number;
+  coefficient: number;
+  notes: EtudiantExportNote[];
+}
+
+export interface EtudiantExport {
+  etudiant_id: string;
+  nom: string;
+  prenom: string;
+  promotion_id: string | null;
+  promotion_nom: string | null;
+  groupes: EtudiantExportGroupe[];
 }

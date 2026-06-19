@@ -18,6 +18,8 @@ import {
   getPromotions, 
   getGroupes, 
   getGroupeEtudiants, 
+  getGroupe,
+  getEnseignantGroupes,
   getPromotionEtudiantsMoyennes,
   getGroupeEtudiantsMoyennes,
   getPromotionMoyenne,
@@ -53,18 +55,112 @@ export default function DashboardPage() {
   const [promoSelectionnee, setPromoSelectionnee] = useState<string>("TOUTES")
   const [groupeSelectionne, setGroupeSelectionne] = useState<string>("TOUS")
 
-  const { hasRole, loading: authLoading } = useAuth()
-  const canAccessDashboard = hasRole("responsable_pedagogique")
+  const { user, hasRole, loading: authLoading } = useAuth()
+  const canAccessDashboard = hasRole("responsable_pedagogique") || hasRole("enseignant")
+  const isEnseignant = hasRole("enseignant") && !hasRole("responsable_pedagogique")
 
-  // 1. Chargement initial unifié de l'ensemble de la scolarité (Étudiants + Promotions + Groupes)
+  // 1. Chargement initial
   useEffect(() => {
     if (authLoading || !canAccessDashboard) {
       setLoading(false)
       return
     }
 
+    if (!user) return
+
     let actif = true
 
+    // --- Enseignant : groupes assignés uniquement ---
+    if (isEnseignant) {
+      async function chargerDonneesEnseignant() {
+        try {
+          setLoading(true)
+          setError(null)
+
+          const assignments = await getEnseignantGroupes(user!.id)
+          const groupes = await Promise.all(
+            assignments.map((a) => getGroupe(a.groupe_id))
+          )
+
+          if (!actif) return
+
+          const etudiantsCharges: EtudiantOut[] = []
+          const moyennesParEtudiant: Record<string, MoyenneParEtudiant | null> = {}
+
+          if (groupeSelectionne !== "TOUS") {
+            const membres = await getGroupeEtudiants(groupeSelectionne)
+            membres.forEach((e) => {
+              etudiantsCharges.push(e)
+              moyennesParEtudiant[e.id] = null
+            })
+            const moyennes = await getGroupeEtudiantsMoyennes(
+              groupeSelectionne, semestreSelectionne
+            ).catch(() => [])
+            moyennes.forEach((m) => {
+              moyennesParEtudiant[m.etudiant_id] = m
+            })
+          } else {
+            const membresParGroupe = await Promise.all(
+              groupes.map((g) => getGroupeEtudiants(g.id).catch(() => [] as EtudiantOut[]))
+            )
+            const seen = new Set<string>()
+            membresParGroupe.flat().forEach((e) => {
+              if (seen.has(e.id)) return
+              seen.add(e.id)
+              etudiantsCharges.push(e)
+              moyennesParEtudiant[e.id] = null
+            })
+            const toutesMoyennes = await Promise.all(
+              groupes.map((g) =>
+                getGroupeEtudiantsMoyennes(g.id, semestreSelectionne).catch(() => [])
+              )
+            )
+            toutesMoyennes.flat().forEach((m) => {
+              moyennesParEtudiant[m.etudiant_id] = m
+            })
+          }
+
+          let moyenneCible: MoyenneOut | null = null
+          if (groupeSelectionne !== "TOUS") {
+            moyenneCible = await getEnseignementMoyenne(
+              groupeSelectionne, semestreSelectionne
+            ).catch(() => null)
+          } else {
+            const moyennesValides = Object.values(moyennesParEtudiant)
+              .map((m) => m?.moyenne ?? null)
+              .filter((m): m is number => m !== null)
+            moyenneCible = {
+              moyenne: moyennesValides.length > 0
+                ? moyennesValides.reduce((t, m) => t + m, 0) / moyennesValides.length
+                : null,
+              semestre: semestreSelectionne,
+              note_count: Object.values(moyennesParEtudiant).reduce(
+                (t, m) => t + (m?.note_count ?? 0), 0
+              ),
+              coefficient_total: Object.values(moyennesParEtudiant).reduce(
+                (t, m) => t + (m?.coefficient_total ?? 0), 0
+              ),
+            }
+          }
+
+          if (actif) {
+            setEtudiants(etudiantsCharges)
+            setGroupesRaw(groupes)
+            setMoyennesByEtudiant(moyennesParEtudiant)
+            setMoyenneScope(moyenneCible)
+          }
+        } catch {
+          if (actif) setError("Impossible de charger les donnees de vos groupes.")
+        } finally {
+          if (actif) setLoading(false)
+        }
+      }
+
+      void chargerDonneesEnseignant()
+      return () => { actif = false }
+    }
+
+    // --- Responsable Pédagogique : toutes promotions/groupes ---
     async function chargerDonneesGlobales() {
       try {
         setLoading(true)
@@ -163,7 +259,7 @@ export default function DashboardPage() {
     return () => {
       actif = false
     }
-  }, [authLoading, canAccessDashboard, semestreSelectionne, promoSelectionnee, groupeSelectionne])
+  }, [authLoading, canAccessDashboard, isEnseignant, user, semestreSelectionne, promoSelectionnee, groupeSelectionne])
 
   // 2. Interrogation dynamique de la table pivot d'attribution dès qu'un groupe est ciblé
   useEffect(() => {
@@ -201,10 +297,11 @@ export default function DashboardPage() {
     return groupesRaw.filter(g => g.promotion_id === promoSelectionnee)
   }, [groupesRaw, promoSelectionnee])
 
-  // Réinitialisation automatique du groupe enfant si la promotion parente change
+  // Réinitialisation du groupe si la promotion parente change (RP uniquement)
   useEffect(() => {
+    if (isEnseignant) return
     setGroupeSelectionne("TOUS")
-  }, [promoSelectionnee])
+  }, [promoSelectionnee, isEnseignant])
 
   // 4. Entonnoir de filtrage virtuel appliqué avant TanStack Table (Garde les originaux intacts)
   const etudiantsFiltrés = useMemo(() => {
@@ -240,11 +337,7 @@ export default function DashboardPage() {
 
         return (
           <div className="flex flex-col">
-            {/* Ajout de la classe capitalize pour nettoyer les données brutes du backend */}
             <span className="font-semibold text-sm text-slate-900 capitalize">{`${nom} ${prenom}`}</span>
-            <span className="text-xs text-muted-foreground">
-              Promotion : {promotion_id ? (promotionMap.get(promotion_id) ?? "Promotion inconnue") : "Non assignée"}
-            </span>
           </div>
         )
       },
@@ -306,7 +399,7 @@ export default function DashboardPage() {
             <div>
               <h2 className="text-base font-semibold text-slate-900">Accès non autorisé</h2>
               <p className="text-sm text-slate-600 mt-1">
-                Votre rôle ne permet pas d&apos;accéder au dashboard. Seuls les responsables pédagogiques peuvent consulter cette page.
+                Votre rôle ne permet pas d&apos;accéder au dashboard. Seuls les responsables pédagogiques et les enseignants peuvent consulter cette page.
               </p>
             </div>
             <Button asChild variant="outline" className="shadow-xs">
@@ -323,13 +416,15 @@ export default function DashboardPage() {
       {/* En-tête modernisé intégrant le bloc de sélection double en cascade */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 rounded-xl border border-slate-200/80 shadow-xs">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Responsable</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Données consolidées issues du backend de scolarité.</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            {isEnseignant ? "Dashboard Enseignant" : "Dashboard Responsable"}
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">Vue d&apos;ensemble de vos groupes.</p>
         </div>
 
         {/* Bloc graphique de filtrage à deux niveaux */}
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-          {/* Menu déroulant des Promotions */}
+          {!isEnseignant && (
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 w-full sm:w-60 shadow-2xs">
             <GraduationCap className="h-4 w-4 text-slate-400 shrink-0" />
             <select
@@ -343,7 +438,7 @@ export default function DashboardPage() {
               ))}
             </select>
           </div>
-
+          )}
           {/* Menu déroulant des Groupes */}
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 w-full sm:w-60 shadow-2xs">
             <Layers className="h-4 w-4 text-slate-400 shrink-0" />

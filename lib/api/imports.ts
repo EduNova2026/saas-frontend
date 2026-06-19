@@ -84,13 +84,16 @@ export async function uploadNotesCsv(params: {
   file: File;
   examenId?: string;
   enseignementId?: string;
+  groupeId?: string;
 }): Promise<ImportJobOut> {
   const formData = new FormData();
   formData.set("file", params.file);
 
-  const query = params.examenId
-    ? `examen_id=${encodeURIComponent(params.examenId)}`
-    : `enseignement_id=${encodeURIComponent(params.enseignementId ?? "")}`;
+  const queryParts: string[] = [];
+  if (params.examenId) queryParts.push(`examen_id=${encodeURIComponent(params.examenId)}`);
+  if (params.enseignementId) queryParts.push(`enseignement_id=${encodeURIComponent(params.enseignementId)}`);
+  if (params.groupeId) queryParts.push(`groupe_id=${encodeURIComponent(params.groupeId)}`);
+  const query = queryParts.join("&");
 
   const response = await apiFetch(
     `/api/imports/upload?${query}`,

@@ -384,7 +384,7 @@ export default function MesGroupeDashboardPage() {
     setActionError(null);
 
     try {
-      const job = await uploadNotesCsv({ examenId: selectedExamen.id, file: uploadFile });
+      const job = await uploadNotesCsv({ examenId: selectedExamen.id, file: uploadFile, groupeId });
       setLastImportStatus(formatImportStatus(job));
       setUploadFile(null);
       await loadNotesForExamen(selectedExamen);
