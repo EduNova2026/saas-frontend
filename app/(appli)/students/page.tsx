@@ -9,11 +9,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
-import { Mail, Search, User, ListTodo, GraduationCap, Loader2, ShieldAlert, AlertCircle, Layers } from "lucide-react"
+import { Search, User, GraduationCap, Loader2, ShieldAlert, Layers } from "lucide-react"
 
 // Importations complétées depuis scolarite.ts
 import { 
   getEtudiants, 
+  getEtudiantExport,
   getEtudiantMoyenne,
   getNotes, 
   getPromotions, 
@@ -25,7 +26,9 @@ import {
   type GroupeOut 
 } from "@/lib/api/scolarite"
 import { useAuth } from "@/hooks/useAuth"
-import type { NoteOut } from "@/types/scolarite"
+import StudentDetailPanel from "@/components/StudentDetailPanel"
+import { printStudentRecord } from "@/lib/student-export-print"
+import type { EtudiantExport, NoteOut } from "@/types/scolarite"
 
 interface EtudiantComplet {
   id: string
@@ -44,14 +47,6 @@ function formatAverage(value: number | null): string {
   return value === null ? "—" : `${value.toFixed(1)}/20`
 }
 
-const formatEmailPart = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9-]/g, "")
-
 export default function StudentsPage() {
   const [etudiantsRaw, setEtudiantsRaw] = useState<EtudiantOut[]>([])
   const [notesRaw, setNotesRaw] = useState<NoteOut[]>([])
@@ -66,6 +61,8 @@ export default function StudentsPage() {
   const [loading, setLoading] = useState(true)
   const [loadingGroupe, setLoadingGroupe] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedExport, setSelectedExport] = useState<EtudiantExport | null>(null)
+  const [exportLoading, setExportLoading] = useState(false)
 
   // Variables de filtrage globales
   const [promoSelectionnee, setPromoSelectionnee] = useState<string>("TOUTES")
@@ -150,12 +147,6 @@ export default function StudentsPage() {
     promotionsRaw.forEach(p => { map[p.id] = p.nom })
     return map
   }, [promotionsRaw])
-
-  const dictionnaireGroupes = useMemo(() => {
-    const map: Record<string, string> = {}
-    groupesRaw.forEach(g => { map[g.id] = g.nom })
-    return map
-  }, [groupesRaw])
 
   // Gestion de la cascade de filtrage
   const listeGroupesFiltrés = useMemo(() => {
@@ -264,24 +255,42 @@ export default function StudentsPage() {
     }
   }, [etudiantsFormates, etudiantSelectionneId])
 
-  // Relevé de notes croisé avec le nom lisible des groupes
-  const detailNotesEtudiant = useMemo(() => {
-    if (!etudiantSelectionneId) return []
-    return notesRaw
-      .filter(note => note.etudiant_id === etudiantSelectionneId)
-      .map(note => {
-        const idDuGroupe = note.examen?.enseignement_id || ""
-        const nomDuGroupeLisible = dictionnaireGroupes[idDuGroupe] || "Général"
+  useEffect(() => {
+    if (!etudiantSelectionne) {
+      setSelectedExport(null)
+      setExportLoading(false)
+      return
+    }
 
-        return {
-          id: note.id,
-          nomGroupe: nomDuGroupeLisible,
-          nomExamen: note.examen?.nom || "Évaluation",
-          noteAffichage: note.absent ? "Absent" : `${note.valeur?.toFixed(1)}/20`,
-          isAbsent: note.absent
+    const selectedStudent = etudiantSelectionne
+    let actif = true
+
+    async function chargerFicheEtudiant() {
+      setExportLoading(true)
+      setSelectedExport(null)
+      try {
+        const exportData = await getEtudiantExport(selectedStudent.id)
+        if (actif) setSelectedExport(exportData)
+      } catch {
+        if (actif) {
+          setSelectedExport({
+            etudiant_id: selectedStudent.id,
+            nom: selectedStudent.nom,
+            prenom: selectedStudent.prenom,
+            promotion_id: selectedStudent.promotionIdBrut || null,
+            promotion_nom: selectedStudent.classe,
+            groupes: [],
+          })
         }
-      })
-  }, [notesRaw, etudiantSelectionneId, dictionnaireGroupes])
+      } finally {
+        if (actif) setExportLoading(false)
+      }
+    }
+
+    void chargerFicheEtudiant()
+
+    return () => { actif = false }
+  }, [etudiantSelectionne])
 
   // 4. Configuration des colonnes TanStack Table
   const columnsTable = useMemo<ColumnDef<EtudiantComplet>[]>(() => [
@@ -351,9 +360,10 @@ export default function StudentsPage() {
     },
   })
 
-  const emailPlaceholder = etudiantSelectionne
-    ? `${formatEmailPart(etudiantSelectionne.prenom)}.${formatEmailPart(etudiantSelectionne.nom)}@student.junia.com`
-    : ""
+  const handleExportPrint = () => {
+    if (!selectedExport) return
+    printStudentRecord(selectedExport)
+  }
 
   if (authLoading) {
     return (
@@ -504,77 +514,11 @@ export default function StudentsPage() {
         {/* Panneau latéral droit : Dossier complet de l'élève ciblé */}
         <Card className="shadow-xs border h-[500px] flex flex-col bg-white overflow-hidden rounded-xl">
           {etudiantSelectionne ? (
-            <div className="p-6 flex flex-col h-full justify-between overflow-y-auto">
-              <div className="space-y-5">
-                {/* Entête Fiche Élève */}
-                <div className="flex flex-col items-center text-center pb-4 border-b border-slate-100 gap-1">
-                  <Avatar className="h-14 w-14 text-lg border shadow-2xs">
-                    <AvatarFallback className="bg-blue-100 text-blue-700 font-bold">
-                      {`${etudiantSelectionne.nom.charAt(0)}${etudiantSelectionne.prenom.charAt(0)}`.toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h2 className="text-base font-bold text-slate-900 capitalize">{`${etudiantSelectionne.prenom} ${etudiantSelectionne.nom}`}</h2>
-                    <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full inline-block mt-1 border border-blue-100">
-                      {etudiantSelectionne.classe}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Métriques et coordonnées de contact */}
-                <div className="space-y-3 text-xs">
-                  <div className="flex items-center gap-2 text-slate-600 bg-slate-50 p-2 rounded-lg border">
-                    <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate font-medium text-slate-700">{emailPlaceholder}</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-2.5 bg-slate-50 rounded-lg border text-center">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Moyenne</p>
-                      <p className="text-base font-bold text-slate-800 mt-0.5">
-                        {formatAverage(etudiantSelectionne.moyenne)}
-                      </p>
-                    </div>
-                    <div className="p-2.5 bg-slate-50 rounded-lg border text-center">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Suivi</p>
-                      <p className={`text-base font-bold mt-0.5 ${etudiantSelectionne.statut === "Risque" ? "text-red-600" : "text-slate-700"}`}>
-                        {etudiantSelectionne.statut}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Relevé de notes détaillé */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <ListTodo className="h-3.5 w-3.5 text-slate-500" /> Relevé de Notes par Groupe
-                  </h3>
-
-                  <ScrollArea className="h-[140px] rounded-lg border bg-slate-50/50 p-2">
-                    {detailNotesEtudiant.length > 0 ? (
-                      <div className="space-y-2">
-                        {detailNotesEtudiant.map((n) => (
-                          <div key={n.id} className="flex items-center justify-between p-2 bg-white rounded-md border text-xs shadow-2xs">
-                            <div className="flex flex-col min-w-0 pr-2">
-                              <span className="font-bold text-slate-800 truncate">{n.nomGroupe}</span>
-                              <span className="text-[10px] text-slate-400 truncate">{n.nomExamen}</span>
-                            </div>
-                            <span className={`font-bold shrink-0 ${n.isAbsent ? "text-red-500 text-[10px]" : "text-slate-700"}`}>
-                              {n.noteAffichage}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-full text-center p-4 text-slate-400 gap-1">
-                        <AlertCircle className="h-4 w-4 text-slate-300" />
-                        <p className="text-[11px]">Aucune note enregistrée pour cet élève.</p>
-                      </div>
-                    )}
-                  </ScrollArea>
-                </div>
-              </div>
-            </div>
+            <StudentDetailPanel
+              data={selectedExport}
+              loading={exportLoading}
+              onExport={handleExportPrint}
+            />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-center p-6 text-slate-400 gap-2">
               <User className="h-10 w-10 text-slate-300 stroke-[1.5]" />

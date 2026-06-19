@@ -40,6 +40,7 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   createEtudiant,
   createPromotionGroupe,
+  getEtudiantExport,
   getPromotion,
   getPromotionEtudiants,
   getPromotionGroupes,
@@ -51,6 +52,9 @@ import {
   type GroupeOut,
   type PromotionOut,
 } from "@/lib/api/scolarite";
+import StudentDetailPanel from "@/components/StudentDetailPanel";
+import { printStudentRecord } from "@/lib/student-export-print";
+import type { EtudiantExport } from "@/types/scolarite";
 
 type Tab = "groupes" | "etudiants";
 
@@ -102,6 +106,9 @@ export default function PromotionDashboardPage() {
   const [moyenneGenerale, setMoyenneGenerale] = useState<number | null>(null);
   const [selectedSemestre, setSelectedSemestre] = useState<"all" | 1 | 2>("all");
   const [tauxReussite, setTauxReussite] = useState<number | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [selectedExport, setSelectedExport] = useState<EtudiantExport | null>(null);
 
   const isAdminPedagogique = hasRole("admin_pedagogique");
   const canManagePromotions = isAdminPedagogique;
@@ -279,6 +286,34 @@ export default function PromotionDashboardPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleVoirClick = async (etudiant: EtudiantOut) => {
+    setExportLoading(true);
+    setExportDialogOpen(true);
+    setSelectedExport(null);
+    setActionError(null);
+
+    try {
+      setSelectedExport(await getEtudiantExport(etudiant.id));
+    } catch (err) {
+      setSelectedExport({
+        etudiant_id: etudiant.id,
+        nom: etudiant.nom,
+        prenom: etudiant.prenom,
+        promotion_id: etudiant.promotion_id,
+        promotion_nom: promotion?.nom ?? null,
+        groupes: [],
+      });
+      setActionError(err instanceof Error ? err.message : "Impossible de charger le relevé détaillé.");
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const handleExportPrint = () => {
+    if (!selectedExport) return;
+    printStudentRecord(selectedExport);
   };
 
   if (authLoading) {
@@ -517,9 +552,9 @@ export default function PromotionDashboardPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-2">
-                              <Button size="sm" variant="outline" className="gap-2" disabled>
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => void handleVoirClick(etudiant)}>
                                 <Eye className="h-4 w-4" />
-                                Voir à venir
+                                Voir
                               </Button>
                               <Button size="sm" variant="outline" className="gap-2" onClick={() => openEtudiantEdit(etudiant)}>
                                 <Pencil className="h-4 w-4" />
@@ -548,6 +583,20 @@ export default function PromotionDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="max-w-md h-[600px] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Dossier étudiant</DialogTitle>
+            <DialogDescription>Relevé de notes détaillé par groupe.</DialogDescription>
+          </DialogHeader>
+          <StudentDetailPanel
+            data={selectedExport}
+            loading={exportLoading}
+            onExport={handleExportPrint}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editingEtudiant !== null || editingGroupe !== null} onOpenChange={(open) => !open && closeEditDialog()}>
         <DialogContent>

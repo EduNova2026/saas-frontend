@@ -598,7 +598,7 @@ export default function MesGroupeDashboardPage() {
           <DialogHeader>
             <DialogTitle>Importer les notes CSV</DialogTitle>
             <DialogDescription>
-              Importez un fichier CSV pour l'examen {selectedExamen?.nom}.
+              Importez un fichier CSV pour l&apos;examen {selectedExamen?.nom}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -623,13 +623,13 @@ export default function MesGroupeDashboardPage() {
           }
         }}
       >
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="!w-[88vw] !max-w-6xl max-h-[82vh] overflow-y-auto p-5">
           <DialogHeader>
             <DialogTitle>Notes de {selectedExamen?.nom}</DialogTitle>
             <DialogDescription>Ajoutez les notes manuellement ou importez un CSV pour cet examen.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+          <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
             <Card>
               <CardHeader><CardTitle className="text-base">Saisie manuelle</CardTitle></CardHeader>
               <CardContent className="space-y-3">
@@ -674,13 +674,13 @@ export default function MesGroupeDashboardPage() {
             </Card>
           </div>
 
-          <ScrollArea className="h-72 rounded-md border">
+          <ScrollArea className="h-80 rounded-md border">
             <Table>
               <TableHeader className="sticky top-0 z-10 border-b bg-slate-50">
                 <TableRow>
                   <TableHead>Élève</TableHead>
                   <TableHead>Note</TableHead>
-                  <TableHead>Motif</TableHead>
+                  <TableHead className="min-w-[360px]">Motif</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -694,7 +694,9 @@ export default function MesGroupeDashboardPage() {
                       <TableRow key={note.id}>
                         <TableCell className="font-medium text-slate-900">{etudiant ? formatStudentName(etudiant.prenom, etudiant.nom) : "Étudiant inconnu"}</TableCell>
                         <TableCell>{note.absent ? "Absent" : `${note.valeur}/${note.examen.note_max}`}</TableCell>
-                        <TableCell>{note.motif_absence ?? "-"}</TableCell>
+                        <TableCell className="max-w-xl whitespace-normal break-words text-sm text-slate-600">
+                          {note.motif_absence ?? "-"}
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
                             <Button size="sm" variant="outline" onClick={() => openEditNote(note)}>Modifier</Button>
