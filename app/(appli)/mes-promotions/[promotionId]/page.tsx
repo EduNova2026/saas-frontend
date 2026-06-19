@@ -513,7 +513,7 @@ export default function MesPromotionDetailPage() {
                                 Modifier
                               </Button>
                               <Button asChild size="sm" variant="outline" className="gap-2">
-                                <Link href={`/mes-groupes/${groupe.id}?tab=eleves`}>
+                                <Link href={`/promotions/${promotionId}/groupes/${groupe.id}?tab=eleves`}>
                                   <Eye className="h-4 w-4" />
                                   Voir
                                 </Link>
