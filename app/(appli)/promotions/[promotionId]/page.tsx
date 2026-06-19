@@ -104,7 +104,7 @@ export default function PromotionDashboardPage() {
   const [tauxReussite, setTauxReussite] = useState<number | null>(null);
 
   const isAdminPedagogique = hasRole("admin_pedagogique");
-  const canManagePromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
+  const canManagePromotions = isAdminPedagogique;
 
   const loadPromotion = useCallback(async () => {
     if (!promotionId) return;

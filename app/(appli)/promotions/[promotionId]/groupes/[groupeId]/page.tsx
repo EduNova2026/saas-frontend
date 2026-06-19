@@ -114,7 +114,7 @@ export default function GroupeManagementPage() {
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
 
   const isAdminPedagogique = hasRole("admin_pedagogique");
-  const canManagePromotions = hasRole("responsable_pedagogique") || isAdminPedagogique;
+  const canManagePromotions = isAdminPedagogique;
 
   const loadGroupe = useCallback(async () => {
     if (!promotionId || !groupeId) return;
