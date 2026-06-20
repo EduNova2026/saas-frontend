@@ -22,11 +22,14 @@ import {
   getEnseignantGroupes,
   getPromotionEtudiantsMoyennes,
   getGroupeEtudiantsMoyennes,
+  getPromotionEtudiantsRisques,
+  getGroupeEtudiantsRisques,
   getPromotionMoyenne,
   getEnseignementMoyenne,
   type EtudiantOut, 
   type MoyenneParEtudiant,
   type MoyenneOut,
+  type RisqueParEtudiant,
   type GroupeOut 
 } from "@/lib/api/scolarite"
 
@@ -44,6 +47,7 @@ export default function DashboardPage() {
   const [groupesRaw, setGroupesRaw] = useState<GroupeOut[]>([])
   const [idsEtudiantsDuGroupe, setIdsEtudiantsDuGroupe] = useState<string[]>([])
   const [moyennesByEtudiant, setMoyennesByEtudiant] = useState<Record<string, MoyenneParEtudiant | null>>({})
+  const [risquesByEtudiant, setRisquesByEtudiant] = useState<Record<string, RisqueParEtudiant | null>>({})
   const [moyenneScope, setMoyenneScope] = useState<MoyenneOut | null>(null)
   const [semestreSelectionne, setSemestreSelectionne] = useState<number>(1)
   
@@ -86,18 +90,26 @@ export default function DashboardPage() {
 
           const etudiantsCharges: EtudiantOut[] = []
           const moyennesParEtudiant: Record<string, MoyenneParEtudiant | null> = {}
+          const risquesParEtudiant: Record<string, RisqueParEtudiant | null> = {}
 
           if (groupeSelectionne !== "TOUS") {
             const membres = await getGroupeEtudiants(groupeSelectionne)
             membres.forEach((e) => {
               etudiantsCharges.push(e)
               moyennesParEtudiant[e.id] = null
+              risquesParEtudiant[e.id] = null
             })
             const moyennes = await getGroupeEtudiantsMoyennes(
               groupeSelectionne, semestreSelectionne
             ).catch(() => [])
             moyennes.forEach((m) => {
               moyennesParEtudiant[m.etudiant_id] = m
+            })
+            const risques = await getGroupeEtudiantsRisques(
+              groupeSelectionne, semestreSelectionne
+            ).catch(() => [])
+            risques.forEach((r) => {
+              risquesParEtudiant[r.etudiant_id] = r
             })
           } else {
             const membresParGroupe = await Promise.all(
@@ -109,6 +121,7 @@ export default function DashboardPage() {
               seen.add(e.id)
               etudiantsCharges.push(e)
               moyennesParEtudiant[e.id] = null
+              risquesParEtudiant[e.id] = null
             })
             const toutesMoyennes = await Promise.all(
               groupes.map((g) =>
@@ -117,6 +130,14 @@ export default function DashboardPage() {
             )
             toutesMoyennes.flat().forEach((m) => {
               moyennesParEtudiant[m.etudiant_id] = m
+            })
+            const tousRisques = await Promise.all(
+              groupes.map((g) =>
+                getGroupeEtudiantsRisques(g.id, semestreSelectionne).catch(() => [])
+              )
+            )
+            tousRisques.flat().forEach((r) => {
+              risquesParEtudiant[r.etudiant_id] = r
             })
           }
 
@@ -147,6 +168,7 @@ export default function DashboardPage() {
             setEtudiants(etudiantsCharges)
             setGroupesRaw(groupes)
             setMoyennesByEtudiant(moyennesParEtudiant)
+            setRisquesByEtudiant(risquesParEtudiant)
             setMoyenneScope(moyenneCible)
           }
         } catch {
@@ -178,6 +200,13 @@ export default function DashboardPage() {
           },
           {}
         )
+        const risquesParEtudiant = etudiantsCharges.reduce<Record<string, RisqueParEtudiant | null>>(
+          (acc, etudiant) => {
+            acc[etudiant.id] = null
+            return acc
+          },
+          {}
+        )
 
         if (groupeSelectionne !== "TOUS") {
           const groupe = groupes.find((groupe) => groupe.id === groupeSelectionne)
@@ -189,6 +218,14 @@ export default function DashboardPage() {
           moyennesGroupe.forEach((moyenne) => {
             moyennesParEtudiant[moyenne.etudiant_id] = moyenne
           })
+          const risquesGroupe = await getGroupeEtudiantsRisques(
+            groupeSelectionne,
+            groupe?.semestre ?? 1
+          ).catch(() => [])
+
+          risquesGroupe.forEach((risque) => {
+            risquesParEtudiant[risque.etudiant_id] = risque
+          })
         } else if (promoSelectionnee !== "TOUTES") {
           const moyennesPromotion = await getPromotionEtudiantsMoyennes(
             promoSelectionnee,
@@ -197,6 +234,14 @@ export default function DashboardPage() {
 
           moyennesPromotion.forEach((moyenne) => {
             moyennesParEtudiant[moyenne.etudiant_id] = moyenne
+          })
+          const risquesPromotion = await getPromotionEtudiantsRisques(
+            promoSelectionnee,
+            semestreSelectionne
+          ).catch(() => [])
+
+          risquesPromotion.forEach((risque) => {
+            risquesParEtudiant[risque.etudiant_id] = risque
           })
         } else {
           const moyennesParPromotion = await Promise.all(
@@ -207,6 +252,15 @@ export default function DashboardPage() {
 
           moyennesParPromotion.flat().forEach((moyenne) => {
             moyennesParEtudiant[moyenne.etudiant_id] = moyenne
+          })
+          const risquesParPromotion = await Promise.all(
+            promotions.map((promotion) =>
+              getPromotionEtudiantsRisques(promotion.id, semestreSelectionne).catch(() => [])
+            )
+          )
+
+          risquesParPromotion.flat().forEach((risque) => {
+            risquesParEtudiant[risque.etudiant_id] = risque
           })
         }
 
@@ -241,6 +295,7 @@ export default function DashboardPage() {
           setPromotionMap(new Map(promotions.map((promotion) => [promotion.id, promotion.nom])))
           setGroupesRaw(groupes ?? [])
           setMoyennesByEtudiant(moyennesParEtudiant)
+          setRisquesByEtudiant(risquesParEtudiant)
           setMoyenneScope(moyenneCible)
         }
       } catch {
@@ -318,10 +373,9 @@ export default function DashboardPage() {
 
   const etudiantsARisque = useMemo(() => {
     return etudiantsFiltrés.filter((etudiant) => {
-      const moyenne = moyennesByEtudiant[etudiant.id]?.moyenne
-      return moyenne !== null && moyenne !== undefined && moyenne < 10
+      return risquesByEtudiant[etudiant.id]?.statut === "Risque"
     }).length
-  }, [etudiantsFiltrés, moyennesByEtudiant])
+  }, [etudiantsFiltrés, risquesByEtudiant])
 
   const donneesGraphique = useMemo(() => [
     { scope: "Moyenne", moyenneGenerale: moyenneScope?.moyenne ?? 0 },
@@ -359,21 +413,40 @@ export default function DashboardPage() {
       id: "scoreRisque",
       header: "SCORE RISQUE",
       cell: ({ row }) => {
-        const m = moyennesByEtudiant[row.original.id];
-        if (!m || m.moyenne === null) return <span className="text-slate-500 text-sm">—</span>;
-        return <span className={m.moyenne < 10 ? "text-red-500 font-bold text-sm" : "text-green-600 text-sm"}>{m.moyenne < 10 ? "À risque" : "OK"}</span>;
+        const risque = risquesByEtudiant[row.original.id];
+        if (!risque || risque.score_risque === null) return <span className="text-slate-500 text-sm">—</span>;
+        const scoreRisque = risque.score_risque;
+        const scoreClassName = scoreRisque >= 70
+          ? "text-red-500 font-bold"
+          : scoreRisque >= 40
+            ? "text-amber-600 font-semibold"
+            : "text-green-600 font-semibold";
+
+        return (
+          <div className="flex flex-col">
+            <span className={`text-sm ${scoreClassName}`}>{scoreRisque}/100</span>
+            <span className="text-xs text-slate-500">{risque.statut}</span>
+          </div>
+        );
       },
     },
     {
       id: "statut",
       header: "STATUT",
       cell: ({ row }) => {
-        const m = moyennesByEtudiant[row.original.id];
-        if (!m) return <span className="text-slate-500 text-sm">—</span>;
-        return <span className="text-sm text-slate-600">{m.note_count} notes</span>;
+        const statut = risquesByEtudiant[row.original.id]?.statut ?? "Non évalué";
+        const badgeClassName = statut === "Risque"
+          ? "bg-red-50 text-red-700 border-red-200"
+          : statut === "Suivre"
+            ? "bg-amber-50 text-amber-700 border-amber-200"
+            : statut === "OK"
+              ? "bg-green-50 text-green-700 border-green-200"
+              : "bg-slate-50 text-slate-600 border-slate-200";
+
+        return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${badgeClassName}`}>{statut}</span>;
       },
     },
-  ], [promotionMap, moyennesByEtudiant])
+  ], [promotionMap, moyennesByEtudiant, risquesByEtudiant])
 
   // Raccordement de la table TanStack aux données filtrées à la volée
   const table = useReactTable<EtudiantOut>({
