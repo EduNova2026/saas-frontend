@@ -24,6 +24,8 @@ export type {
   MoyenneOut,
   MoyenneParEtudiant,
   ResponsablePromotionOut,
+  RisqueOut,
+  RisqueParEtudiant,
 } from "@/types/scolarite";
 
 export interface PromotionOut {
@@ -1145,6 +1147,101 @@ export async function getEtudiantExport(
 
   const data = (await response.json()) as EtudiantExport;
   return data;
+}
+
+// --- Risque ---
+
+import type { RisqueOut, RisqueParEtudiant } from "@/types/scolarite";
+
+function normalizeRisque(value: unknown): RisqueOut | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const statut = record.statut;
+  if (typeof statut !== "string") return null;
+
+  return {
+    score_risque: typeof record.score_risque === "number" ? record.score_risque : null,
+    statut: statut as RisqueOut["statut"],
+    moyenne: typeof record.moyenne === "number" ? record.moyenne : null,
+    moyenne_reference: typeof record.moyenne_reference === "number" ? record.moyenne_reference : null,
+    ecart_moyenne: typeof record.ecart_moyenne === "number" ? record.ecart_moyenne : null,
+    semestre: typeof record.semestre === "number" ? record.semestre : 0,
+    note_count: typeof record.note_count === "number" ? record.note_count : 0,
+    coefficient_total: typeof record.coefficient_total === "number" ? record.coefficient_total : 0,
+    absence_count: typeof record.absence_count === "number" ? record.absence_count : 0,
+    evaluation_count: typeof record.evaluation_count === "number" ? record.evaluation_count : 0,
+    absence_rate: typeof record.absence_rate === "number" ? record.absence_rate : 0,
+    score_notes: typeof record.score_notes === "number" ? record.score_notes : null,
+    score_absences: typeof record.score_absences === "number" ? record.score_absences : 0,
+    reference_scope: (record.reference_scope as RisqueOut["reference_scope"]) ?? "seuil_10",
+    formule_version: typeof record.formule_version === "string" ? record.formule_version : "risque-v1",
+  };
+}
+
+function normalizeRisqueParEtudiant(value: unknown): RisqueParEtudiant | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const risque = normalizeRisque(value);
+  if (!risque) return null;
+
+  if (typeof record.etudiant_id !== "string") return null;
+
+  return { ...risque, etudiant_id: record.etudiant_id };
+}
+
+export async function getEtudiantRisque(
+  etudiantId: string,
+  semestre: number = 1
+): Promise<RisqueOut> {
+  const response = await apiFetch(
+    `/api/scolarite/etudiants/${etudiantId}/risque?semestre=${semestre}`
+  );
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger le score de risque de l'étudiant.");
+  }
+
+  const risque = normalizeRisque(await response.json());
+  if (!risque) throw new Error("La réponse risque est invalide.");
+  return risque;
+}
+
+export async function getPromotionEtudiantsRisques(
+  promotionId: string,
+  semestre: number = 1
+): Promise<RisqueParEtudiant[]> {
+  const response = await apiFetch(
+    `/api/scolarite/promotions/${promotionId}/etudiants/risques?semestre=${semestre}`
+  );
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger les scores de risque des étudiants.");
+  }
+
+  const data = await response.json();
+  return (Array.isArray(data) ? data : [])
+    .map(normalizeRisqueParEtudiant)
+    .filter((risque): risque is RisqueParEtudiant => risque !== null);
+}
+
+export async function getGroupeEtudiantsRisques(
+  groupeId: string,
+  semestre: number = 1
+): Promise<RisqueParEtudiant[]> {
+  const response = await apiFetch(
+    `/api/scolarite/groupes/${groupeId}/etudiants/risques?semestre=${semestre}`
+  );
+
+  if (!response.ok) {
+    throw await readError(response, "Impossible de charger les scores de risque des étudiants.");
+  }
+
+  const data = await response.json();
+  return (Array.isArray(data) ? data : [])
+    .map(normalizeRisqueParEtudiant)
+    .filter((risque): risque is RisqueParEtudiant => risque !== null);
 }
 
 export async function getGroupeEtudiantsMoyennes(

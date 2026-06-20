@@ -14,14 +14,13 @@ import { Search, User, GraduationCap, Loader2, ShieldAlert, Layers } from "lucid
 // Importations complétées depuis scolarite.ts
 import { 
   getEtudiants, 
-  getEtudiantExport,
-  getEtudiantMoyenne,
+  getEtudiantRisque,
   getNotes, 
   getPromotions, 
   getGroupes, 
   getGroupeEtudiants, 
   type EtudiantOut, 
-  type MoyenneOut,
+  type RisqueOut,
   type PromotionOut, 
   type GroupeOut 
 } from "@/lib/api/scolarite"
@@ -38,8 +37,8 @@ interface EtudiantComplet {
   promotionIdBrut: string
   moyenne: number | null
   derniereNote: string
-  scoreRisque: number
-  statut: "OK" | "Risque" | "Suivre"
+  scoreRisque: number | null
+  statut: "Non évalué" | "OK" | "Risque" | "Suivre"
   aDesNotes: boolean
 }
 
@@ -53,7 +52,7 @@ export default function StudentsPage() {
   const [promotionsRaw, setPromotionsRaw] = useState<PromotionOut[]>([])
   const [groupesRaw, setGroupesRaw] = useState<GroupeOut[]>([])
   const [idsEtudiantsDuGroupe, setIdsEtudiantsDuGroupe] = useState<string[]>([])
-  const [moyennesByEtudiant, setMoyennesByEtudiant] = useState<Record<string, MoyenneOut | null>>({})
+  const [risquesByEtudiant, setRisquesByEtudiant] = useState<Record<string, RisqueOut | null>>({})
   
   const [recherche, setRecherche] = useState("")
   const [etudiantSelectionneId, setEtudiantSelectionneId] = useState<string | null>(null)
@@ -174,7 +173,7 @@ export default function StudentsPage() {
 
   useEffect(() => {
     if (etudiantsFiltres.length === 0) {
-      setMoyennesByEtudiant({})
+      setRisquesByEtudiant({})
       return
     }
 
@@ -182,22 +181,19 @@ export default function StudentsPage() {
 
     async function chargerMoyennesEtudiants() {
       const resultats = await Promise.allSettled(
-        etudiantsFiltres.map(async etudiant => ({
-          etudiantId: etudiant.id,
-          moyenne: await getEtudiantMoyenne(etudiant.id, selectedSemestre ?? 1),
-        }))
+        etudiantsFiltres.map(etudiant => getEtudiantRisque(etudiant.id, selectedSemestre ?? 1))
       )
 
       if (!actif) return
 
-      const moyennes: Record<string, MoyenneOut | null> = {}
+      const risques: Record<string, RisqueOut | null> = {}
       resultats.forEach((resultat, index) => {
         const etudiantId = etudiantsFiltres[index]?.id
         if (!etudiantId) return
-        moyennes[etudiantId] = resultat.status === "fulfilled" ? resultat.value.moyenne : null
+        risques[etudiantId] = resultat.status === "fulfilled" ? resultat.value : null
       })
 
-      setMoyennesByEtudiant(moyennes)
+      setRisquesByEtudiant(risques)
     }
 
     void chargerMoyennesEtudiants()
@@ -211,21 +207,13 @@ export default function StudentsPage() {
       .map((etudiant) => {
         const notesEtudiant = notesRaw.filter(note => note.etudiant_id === etudiant.id)
         const notesValides = notesEtudiant.filter(n => !n.absent && n.valeur !== undefined && n.valeur !== null)
+        const risque = risquesByEtudiant[etudiant.id]
         
         const totalNotes = notesValides.length
-        const moyenneValue = moyennesByEtudiant[etudiant.id]?.moyenne ?? null
+        const moyenneValue = risque?.moyenne ?? null
 
         const derniereNoteObj = notesValides[notesValides.length - 1]
         const derniereNoteStr = derniereNoteObj ? `${derniereNoteObj.valeur?.toFixed(1)}/20` : "—"
-
-        let scoreRisque = 15
-        if (moyenneValue === null) scoreRisque = 0 
-        else if (moyenneValue < 10) scoreRisque = 85 
-        else if (moyenneValue < 12) scoreRisque = 45
-
-        let statut: "OK" | "Risque" | "Suivre" = "OK"
-        if (scoreRisque >= 70) statut = "Risque"
-        else if (scoreRisque >= 40) statut = "Suivre"
 
         const idPromo = etudiant.promotion_id || ""
 
@@ -237,12 +225,12 @@ export default function StudentsPage() {
           promotionIdBrut: idPromo,
           moyenne: moyenneValue,
           derniereNote: derniereNoteStr,
-          scoreRisque: scoreRisque,
-          statut: statut,
+          scoreRisque: risque?.score_risque ?? null,
+          statut: risque?.statut ?? "Non évalué",
           aDesNotes: totalNotes > 0
         }
       })
-  }, [etudiantsFiltres, notesRaw, moyennesByEtudiant, dictionnairePromotions])
+  }, [etudiantsFiltres, notesRaw, risquesByEtudiant, dictionnairePromotions])
 
   // Synchronisation de l'élève sélectionné à droite
   const etudiantSelectionne = useMemo(() => {
@@ -319,7 +307,7 @@ export default function StudentsPage() {
       id: "moyenne",
       header: "MOYENNE",
       cell: ({ row }) => {
-        const moyenneValue = row.original.moyenne
+        const moyenneValue = risquesByEtudiant[row.original.id]?.moyenne ?? null
         return <span className={`font-bold ${moyenneValue === null ? "text-slate-400" : "text-slate-800"}`}>{formatAverage(moyenneValue)}</span>
       },
     },
@@ -333,19 +321,20 @@ export default function StudentsPage() {
       header: "STATUT",
       cell: ({ row }) => {
         const { statut } = row.original
-        const styles = {
+        const styles: Record<string, string> = {
           Risque: "bg-red-100 text-red-700 border-red-200",
           Suivre: "bg-amber-100 text-amber-700 border-amber-200",
           OK: "bg-green-100 text-green-700 border-green-200",
+          "Non évalué": "bg-slate-100 text-slate-500 border-slate-200",
         }
         return (
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[statut]}`}>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[statut] ?? ""}`}>
             {statut}
           </span>
         )
       },
     },
-  ], [])
+  ], [risquesByEtudiant])
 
   const table = useReactTable<EtudiantComplet>({
     data: etudiantsFormates,

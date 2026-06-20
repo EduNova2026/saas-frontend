@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ClipboardList, FileUp, Loader2, Plus, Search, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExamenNotesDialog } from "@/components/examen-notes-dialog";
 import {
   Dialog,
   DialogContent,
@@ -65,11 +66,6 @@ function formatAverage(value: number | null): string {
   return value === null ? "—" : `${value.toFixed(1)}/20`;
 }
 
-function formatImportStatus(job: ImportJobOut): string {
-  if (job.statut) return `Import CSV ${job.statut.toLowerCase()}.`;
-  return "Import CSV en cours...";
-}
-
 export default function MesGroupeDashboardPage() {
   const params = useParams<{ groupeId: string }>();
   const router = useRouter();
@@ -88,7 +84,6 @@ export default function MesGroupeDashboardPage() {
   const [notes, setNotes] = useState<NoteOut[]>([]);
   const [search, setSearch] = useState("");
   const [selectedExamen, setSelectedExamen] = useState<ExamenOut | null>(null);
-  const [dialogCsvOpen, setDialogCsvOpen] = useState(false);
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
   const [noteEtudiantId, setNoteEtudiantId] = useState("");
   const [noteValue, setNoteValue] = useState("");
@@ -96,7 +91,7 @@ export default function MesGroupeDashboardPage() {
   const [noteMotif, setNoteMotif] = useState("");
   const [editingNote, setEditingNote] = useState<NoteOut | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [lastImportStatus, setLastImportStatus] = useState<string | null>(null);
+  const [lastImportJob, setLastImportJob] = useState<ImportJobOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -367,13 +362,6 @@ export default function MesGroupeDashboardPage() {
     }
   };
 
-  const openCsvDialog = (examen: ExamenOut) => {
-    setSelectedExamen(examen);
-    setDialogCsvOpen(true);
-    setActionError(null);
-    setUploadFile(null);
-  };
-
   const handleUploadCsv = async () => {
     if (!uploadFile || !selectedExamen) {
       setActionError("Sélectionnez un examen et un fichier CSV.");
@@ -385,7 +373,7 @@ export default function MesGroupeDashboardPage() {
 
     try {
       const job = await uploadNotesCsv({ examenId: selectedExamen.id, file: uploadFile, groupeId });
-      setLastImportStatus(formatImportStatus(job));
+      setLastImportJob(job);
       setUploadFile(null);
       await loadNotesForExamen(selectedExamen);
       await refreshAllNotes();
@@ -574,7 +562,7 @@ export default function MesGroupeDashboardPage() {
                                 <ClipboardList className="h-4 w-4" />
                                 Notes
                               </Button>
-                              <Button size="sm" variant="outline" className="gap-2" onClick={() => openCsvDialog(examen)}>
+                              <Button size="sm" variant="outline" className="gap-2" onClick={() => void openNotesDialog(examen)}>
                                 <FileUp className="h-4 w-4" />
                                 Importer
                               </Button>
@@ -593,28 +581,7 @@ export default function MesGroupeDashboardPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogCsvOpen} onOpenChange={(open) => !open && setDialogCsvOpen(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Importer les notes CSV</DialogTitle>
-            <DialogDescription>
-              Importez un fichier CSV pour l&apos;examen {selectedExamen?.nom}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input type="file" accept=".csv,text/csv" onChange={(event: ChangeEvent<HTMLInputElement>) => setUploadFile(event.target.files?.[0] ?? null)} />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogCsvOpen(false)} disabled={saving}>Annuler</Button>
-              <Button onClick={handleUploadCsv} disabled={!uploadFile || saving || !selectedExamen}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Importer
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
+      <ExamenNotesDialog
         open={notesDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
@@ -622,98 +589,32 @@ export default function MesGroupeDashboardPage() {
             setSelectedExamen(null);
           }
         }}
-      >
-        <DialogContent className="!w-[88vw] !max-w-6xl max-h-[82vh] overflow-y-auto p-5">
-          <DialogHeader>
-            <DialogTitle>Notes de {selectedExamen?.nom}</DialogTitle>
-            <DialogDescription>Ajoutez les notes manuellement ou importez un CSV pour cet examen.</DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-            <Card>
-              <CardHeader><CardTitle className="text-base">Saisie manuelle</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <select
-                  value={editingNote ? editingNote.etudiant_id : noteEtudiantId}
-                  onChange={(event) => setNoteEtudiantId(event.target.value)}
-                  disabled={editingNote !== null || etudiantsSansNote.length === 0}
-                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:opacity-50"
-                >
-                  <option value="">Sélectionner un élève</option>
-                  {etudiantsSansNote.map((etudiant) => (
-                    <option key={etudiant.id} value={etudiant.id}>{formatStudentName(etudiant.prenom, etudiant.nom)}</option>
-                  ))}
-                </select>
-                <Input type="number" min="0" max={selectedExamen?.note_max ?? 20} step="0.1" value={noteValue} onChange={(event) => setNoteValue(event.target.value)} placeholder="Valeur" disabled={noteAbsent} />
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" checked={noteAbsent} onChange={(event) => setNoteAbsent(event.target.checked)} />
-                  Élève absent
-                </label>
-                <Input value={noteMotif} onChange={(event) => setNoteMotif(event.target.value)} placeholder="Motif d'absence optionnel" />
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveNote} disabled={saving || (!editingNote && !noteEtudiantId)}>
-                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {editingNote ? "Modifier" : "Ajouter"}
-                  </Button>
-                  {editingNote && selectedExamen ? <Button variant="outline" onClick={() => void loadNotesForExamen(selectedExamen)}>Annuler</Button> : null}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="text-base">Import CSV</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-slate-600">Le fichier sera importé pour l&apos;examen sélectionné.</p>
-                <Input type="file" accept=".csv,text/csv" onChange={(event: ChangeEvent<HTMLInputElement>) => setUploadFile(event.target.files?.[0] ?? null)} />
-                <Button variant="outline" className="gap-2" onClick={handleUploadCsv} disabled={!uploadFile || saving || !selectedExamen}>
-                  <FileUp className="h-4 w-4" />
-                  Importer le CSV
-                </Button>
-                {lastImportStatus ? <p className="text-sm text-slate-600">{lastImportStatus}</p> : null}
-              </CardContent>
-            </Card>
-          </div>
-
-          <ScrollArea className="h-80 rounded-md border">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 border-b bg-slate-50">
-                <TableRow>
-                  <TableHead>Élève</TableHead>
-                  <TableHead>Note</TableHead>
-                  <TableHead className="min-w-[360px]">Motif</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loadingNotes ? (
-                  <LoadingRow colSpan={4} label="Chargement des notes…" />
-                ) : notes.length > 0 ? (
-                  notes.map((note) => {
-                    const etudiant = etudiants.find((item) => item.id === note.etudiant_id);
-                    return (
-                      <TableRow key={note.id}>
-                        <TableCell className="font-medium text-slate-900">{etudiant ? formatStudentName(etudiant.prenom, etudiant.nom) : "Étudiant inconnu"}</TableCell>
-                        <TableCell>{note.absent ? "Absent" : `${note.valeur}/${note.examen.note_max}`}</TableCell>
-                        <TableCell className="max-w-xl whitespace-normal break-words text-sm text-slate-600">
-                          {note.motif_absence ?? "-"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant="outline" onClick={() => openEditNote(note)}>Modifier</Button>
-                            <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => void handleDeleteNote(note)}>Supprimer</Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <EmptyRow colSpan={4} label="Aucune note pour cet examen." />
-                )}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
+        examen={selectedExamen}
+        actionError={actionError}
+        noteEtudiantId={noteEtudiantId}
+        noteValue={noteValue}
+        noteAbsent={noteAbsent}
+        noteMotif={noteMotif}
+        editingNote={editingNote}
+        etudiantsSansNote={etudiantsSansNote}
+        onNoteEtudiantIdChange={setNoteEtudiantId}
+        onNoteValueChange={setNoteValue}
+        onNoteAbsentChange={setNoteAbsent}
+        onNoteMotifChange={setNoteMotif}
+        onSaveNote={handleSaveNote}
+        onCancelEditNote={() => { if (selectedExamen) void loadNotesForExamen(selectedExamen); }}
+        saving={saving}
+        uploadFile={uploadFile}
+        onUploadFileChange={setUploadFile}
+        onUploadCsv={handleUploadCsv}
+        lastImportJob={lastImportJob}
+        notes={notes}
+        allStudents={etudiants}
+        loadingNotes={loadingNotes}
+        onEditNote={openEditNote}
+        onDeleteNote={handleDeleteNote}
+        formatStudentName={formatStudentName}
+      />
     </main>
   );
 }

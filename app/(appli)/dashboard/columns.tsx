@@ -10,8 +10,8 @@ export type Etudiant = {
   classe: string
   moyenne: number
   derniereNote: string
-  scoreRisque: number
-  statut: "OK" | "Risque" | "Suivre"
+  scoreRisque: number | null
+  statut: "Non évalué" | "OK" | "Suivre" | "Risque"
   matiere: string
 }
 
@@ -53,6 +53,10 @@ export const columns: ColumnDef<Etudiant>[] = [
     header: "SCORE RISQUE",
     cell: ({ row }) => {
       const score = row.original.scoreRisque
+      if (score === null) {
+        return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border bg-slate-50 text-slate-500 border-slate-200">—</span>
+      }
+
       let label = "Faible"
       let bgClass = "bg-emerald-50 text-emerald-700 border-emerald-200"
 
@@ -80,13 +84,15 @@ export const columns: ColumnDef<Etudiant>[] = [
       const styles = {
         OK: "bg-emerald-100 text-emerald-800 border-emerald-300",
         Risque: "bg-red-100 text-red-800 border-red-300",
-        Suivre: "bg-amber-100 text-amber-800 border-amber-300"
+        Suivre: "bg-amber-100 text-amber-800 border-amber-300",
+        "Non évalué": "bg-slate-100 text-slate-600 border-slate-300",
       }
 
       const labels = {
         OK: "✓ OK",
         Risque: "⚠ Risque",
-        Suivre: "~ Suivre"
+        Suivre: "~ Suivre",
+        "Non évalué": "— N/E",
       }
 
       return (

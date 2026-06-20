@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ClipboardList,
   Eye,
-  FileUp,
   Loader2,
   Pencil,
   Plus,
@@ -18,7 +17,8 @@ import {
   UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExamenNotesDialog } from "@/components/examen-notes-dialog";
 import {
   Dialog,
   DialogContent,
@@ -884,152 +884,43 @@ export default function GroupeManagementPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={selectedExamen !== null} onOpenChange={(open) => !open && setSelectedExamen(null)}>
-        <DialogContent className="!w-[88vw] !max-w-6xl max-h-[82vh] overflow-y-auto p-5">
-          <DialogHeader>
-            <DialogTitle>Notes de {selectedExamen?.nom}</DialogTitle>
-            <DialogDescription>Recherchez un élève, saisissez une note, ou importez un CSV.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Saisie manuelle</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <select
-                  value={editingNote ? editingNote.etudiant_id : noteEtudiantId}
-                  onChange={(event) => setNoteEtudiantId(event.target.value)}
-                  disabled={editingNote !== null || etudiantsSansNote.length === 0}
-                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-slate-300 disabled:opacity-50"
-                >
-                  <option value="">Sélectionner un élève</option>
-                  {etudiantsSansNote.map((etudiant) => (
-                    <option key={etudiant.id} value={etudiant.id}>{formatStudentName(etudiant.prenom, etudiant.nom)}</option>
-                  ))}
-                </select>
-                <Input type="number" min="0" max={selectedExamen?.note_max ?? 20} step="0.1" value={noteValue} onChange={(event) => setNoteValue(event.target.value)} placeholder="Valeur" disabled={noteAbsent} />
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" checked={noteAbsent} onChange={(event) => setNoteAbsent(event.target.checked)} />
-                  Élève absent
-                </label>
-                <Input value={noteMotif} onChange={(event) => setNoteMotif(event.target.value)} placeholder="Motif d'absence optionnel" />
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveNote} disabled={saving || (!editingNote && !noteEtudiantId)}>
-                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    {editingNote ? "Modifier" : "Ajouter"}
-                  </Button>
-                  {editingNote ? <Button variant="outline" onClick={() => void loadNotesForExamen(selectedExamen as ExamenOut)}>Annuler</Button> : null}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Ajouter un élève</CardTitle>
-                <CardDescription>Recherchez un élève de la promotion pour l&apos;ajouter au groupe.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Nom ou prénom..."
-                    value={searchStudentQuery}
-                    onChange={(e) => handleSearchStudent(e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-                {searchStudentLoading ? (
-                  <div className="flex items-center justify-center py-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-                  </div>
-                ) : studentSearchResults.length > 0 ? (
-                  <div className="space-y-1 max-h-32 overflow-y-auto">
-                    {studentSearchResults.map((etudiant) => (
-                      <div
-                        key={etudiant.id}
-                        className="flex items-center justify-between p-2 bg-white rounded-md border text-xs"
-                      >
-                        <span className="font-medium text-slate-800 truncate">
-                          {formatStudentName(etudiant.prenom, etudiant.nom)}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 gap-1 text-xs"
-                          onClick={() => handleAddStudentToGroup(etudiant.id)}
-                          disabled={assigningStudentId === etudiant.id}
-                        >
-                          {assigningStudentId === etudiant.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <UserPlus className="h-3 w-3" />
-                          )}
-                          Ajouter
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : searchStudentQuery.trim() ? (
-                  <p className="text-xs text-slate-400 py-2 text-center">
-                    Aucun élève trouvé.
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Import CSV</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Input type="file" accept=".csv,text/csv" onChange={(event: ChangeEvent<HTMLInputElement>) => setUploadFile(event.target.files?.[0] ?? null)} />
-                <Button variant="outline" className="gap-2" onClick={handleUploadCsv} disabled={!uploadFile || saving || !groupeId}>
-                  <FileUp className="h-4 w-4" />
-                  Importer le CSV
-                </Button>
-                {lastImportJob ? <p className="text-sm text-slate-600">Import CSV lancé</p> : null}
-              </CardContent>
-            </Card>
-          </div>
-
-          <ScrollArea className="h-80 rounded-md border">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 border-b bg-slate-50">
-                <TableRow>
-                  <TableHead>Élève</TableHead>
-                  <TableHead>Note</TableHead>
-                  <TableHead className="min-w-[360px]">Motif</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {notes.length > 0 ? (
-                  notes.map((note) => {
-                    const etudiant = etudiantsGroupe.find((item) => item.id === note.etudiant_id);
-                    return (
-                      <TableRow key={note.id}>
-                        <TableCell className="font-medium text-slate-900">{etudiant ? formatStudentName(etudiant.prenom, etudiant.nom) : "Étudiant inconnu"}</TableCell>
-                        <TableCell>{note.absent ? "Absent" : `${note.valeur}/${note.examen.note_max}`}</TableCell>
-                        <TableCell className="max-w-xl whitespace-normal break-words text-sm text-slate-600">
-                          {note.motif_absence ?? "-"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant="outline" onClick={() => openEditNote(note)}>Modifier</Button>
-                            <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => void handleDeleteNote(note)}>Supprimer</Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <EmptyRow colSpan={4} label="Aucune note pour cet examen." />
-                )}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
+      <ExamenNotesDialog
+        open={selectedExamen !== null}
+        onOpenChange={(open) => { if (!open) setSelectedExamen(null); }}
+        examen={selectedExamen}
+        actionError={actionError}
+        noteEtudiantId={noteEtudiantId}
+        noteValue={noteValue}
+        noteAbsent={noteAbsent}
+        noteMotif={noteMotif}
+        editingNote={editingNote}
+        etudiantsSansNote={etudiantsSansNote}
+        onNoteEtudiantIdChange={setNoteEtudiantId}
+        onNoteValueChange={setNoteValue}
+        onNoteAbsentChange={setNoteAbsent}
+        onNoteMotifChange={setNoteMotif}
+        onSaveNote={handleSaveNote}
+        onCancelEditNote={() => { if (selectedExamen) void loadNotesForExamen(selectedExamen as ExamenOut); }}
+        saving={saving}
+        uploadFile={uploadFile}
+        onUploadFileChange={setUploadFile}
+        onUploadCsv={handleUploadCsv}
+        lastImportJob={lastImportJob}
+        notes={notes}
+        allStudents={etudiantsGroupe}
+        loadingNotes={false}
+        onEditNote={openEditNote}
+        onDeleteNote={handleDeleteNote}
+        formatStudentName={formatStudentName}
+        studentSearch={{
+          query: searchStudentQuery,
+          results: studentSearchResults,
+          loading: searchStudentLoading,
+          onSearchChange: handleSearchStudent,
+          onAddStudent: handleAddStudentToGroup,
+          assigningId: assigningStudentId,
+        }}
+      />
     </main>
   );
 }

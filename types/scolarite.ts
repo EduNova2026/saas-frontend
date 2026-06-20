@@ -139,3 +139,30 @@ export interface EtudiantExport {
   promotion_nom: string | null;
   groupes: EtudiantExportGroupe[];
 }
+
+// --- Risque ---
+
+export type StatutRisque = "Non évalué" | "OK" | "Suivre" | "Risque";
+export type ReferenceRisque = "promotion" | "groupe" | "seuil_10";
+
+export interface RisqueOut {
+  score_risque: number | null;
+  statut: StatutRisque;
+  moyenne: number | null;
+  moyenne_reference: number | null;
+  ecart_moyenne: number | null;
+  semestre: number;
+  note_count: number;
+  coefficient_total: number;
+  absence_count: number;
+  evaluation_count: number;
+  absence_rate: number;
+  score_notes: number | null;
+  score_absences: number;
+  reference_scope: ReferenceRisque;
+  formule_version: string;
+}
+
+export interface RisqueParEtudiant extends RisqueOut {
+  etudiant_id: string;
+}
